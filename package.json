@@ -1,0 +1,49 @@
+{
+  "name": "neo",
+  "version": "0.0.0",
+  "description": "A minimal lightweight open coding subagent.",
+  "author": "Andre Landgraf <andre@neon.tech>",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "neo": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neon-solutions/neo.git"
+  },
+  "homepage": "https://github.com/neon-solutions/neo#readme",
+  "bugs": {
+    "url": "https://github.com/neon-solutions/neo/issues"
+  },
+  "keywords": [
+    "cli",
+    "coding-agent",
+    "subagent"
+  ],
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "build": "tsup src/cli.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "fmt": "prettier --write ."
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.8.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
