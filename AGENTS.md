@@ -15,11 +15,13 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 
 ## Workflow
 
-1. Branch from up-to-date `main`.
-2. Implement. Keep the diff to one concern.
+Work on `main`. Push `main`. No feature branch, no PR.
+
+1. Pull latest `main`.
+2. Implement. Keep the commit to one concern.
 3. `bun run test` and `bun run typecheck`.
 4. `bun run fmt`.
-5. Open a PR against `main`.
+5. `git push origin main`.
 
 ## Layout
 

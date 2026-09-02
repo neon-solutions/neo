@@ -14,7 +14,7 @@ Bun is the package manager. Node.js 22+ is the runtime.
 
 ## Changes
 
-Branch from `main`. Keep a PR to one concern. Tests use Vitest against the real CLI (`bun src/cli.ts`); do not mock the filesystem or the process.
+Work on `main`. Push `main`. No feature branch, no PR. Keep a commit to one concern. Tests use Vitest against the real CLI (`bun src/cli.ts`); do not mock the filesystem or the process.
 
 `bun run fmt` before you push.
 
