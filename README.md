@@ -12,6 +12,12 @@ bun src/cli.ts run --model fable --prompt "Review this diff" --cwd /path/to/repo
 
 The agent loop is not implemented yet. `neo run` parses flags and exits 2 until it is.
 
+## Design
+
+Capabilities are plugins. The core is the loop, the CLI, and the seams those plugins plug into.
+
+A layer that currently has one implementation still lives behind that seam. "Let's only support the Neon AI Gateway for now" means the gateway layer starts with a Neon AI Gateway plugin.
+
 ## Develop
 
 ```bash
