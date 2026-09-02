@@ -7,10 +7,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(root, "src/cli.ts");
 
 function neo(args: string[]) {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
   return spawnSync("bun", [cli, ...args], {
     encoding: "utf8",
     cwd: root,
-    env: process.env,
+    env,
     timeout: 120_000,
   });
 }

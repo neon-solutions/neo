@@ -14,7 +14,7 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 ## Product constraints
 
 - Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: stepCountIs(20)`. Not Mastra. Not Pi.
-- Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `NEON_AI_GATEWAY_*`, plus cwd `.env.local` if present.
+- Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `~/.config/neo/providers/neon.json` (`apiKey`, `baseURL`). `NEON_AI_GATEWAY_*` overrides when both are set.
 - Tools: `read`, `grep`, `glob`, `bash`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` is reserved; v1 has no write tools.
 - stderr is progress. stdout is the answer.
 - No TUI, sessions, compaction, MCP, or subagents-of-subagents in v1.
@@ -36,7 +36,7 @@ Work on `main`. Push `main`. No feature branch, no PR.
 src/cli.ts                       Commander entry
 src/lib/run.ts                   ToolLoopAgent loop
 src/lib/gateway.ts               Gateway seam
-src/plugins/neon-ai-gateway.ts   First gateway plugin
+src/plugins/neon-ai-gateway.ts   First gateway plugin (~/.config/neo/providers/neon.json)
 src/plugins/tools.ts             read, grep, glob, bash
 tests/                           Vitest, real CLI process, no mocks
 neon.ts                          preview.aiGateway

@@ -2,7 +2,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command } from "commander";
-import { loadCwdEnv, readGatewayCredentials } from "./lib/env";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
 import { createNeonGateway } from "./plugins/neon-ai-gateway";
@@ -34,8 +33,7 @@ async function runAgent(opts: RunOptions): Promise<void> {
   }
 
   const cwd = process.cwd();
-  loadCwdEnv(cwd);
-  const gateway = createNeonGateway(readGatewayCredentials());
+  const gateway = createNeonGateway();
   const text = await run({
     model: opts.model,
     cwd,
@@ -46,9 +44,7 @@ async function runAgent(opts: RunOptions): Promise<void> {
 }
 
 async function printModels(): Promise<void> {
-  const cwd = process.cwd();
-  loadCwdEnv(cwd);
-  const gateway = createNeonGateway(readGatewayCredentials());
+  const gateway = createNeonGateway();
   const text = await listModels(gateway);
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
 }

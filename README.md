@@ -16,7 +16,16 @@ neo models list
 
 prints the live catalog (id and name) from this branch's gateway.
 
-Credentials are `NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL`. A cwd `.env.local` is loaded if present. `neon link` / `neon env pull` write them when `neon.ts` enables `preview.aiGateway`.
+The Neon gateway plugin reads `~/.config/neo/providers/neon.json`:
+
+```json
+{
+  "apiKey": "...",
+  "baseURL": "https://<branch>.aws.neon.tech"
+}
+```
+
+`NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL` override the file when both are set. Other gateway plugins pick their own filename under `~/.config/neo/providers/`.
 
 v1 does not read AGENTS.md and does not load skills.
 

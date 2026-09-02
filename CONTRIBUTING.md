@@ -11,7 +11,7 @@ bun run test
 bun run typecheck
 ```
 
-Bun is the package manager. Node.js 22+ is the runtime. Live tests need `NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL` from `.env.local`.
+Bun is the package manager. Node.js 22+ is the runtime. Live tests need `~/.config/neo/providers/neon.json` or both `NEON_AI_GATEWAY_*` env vars.
 
 ## Changes
 

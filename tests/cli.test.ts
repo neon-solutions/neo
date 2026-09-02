@@ -1,11 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { NeoError } from "../src/lib/errors";
-import { resolveModelId } from "../src/plugins/neon-ai-gateway";
+import {
+  loadNeonProviderConfig,
+  parseNeonProviderConfig,
+  resolveModelId,
+} from "../src/plugins/neon-ai-gateway";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(root, "src/cli.ts");
@@ -53,12 +57,13 @@ test("rejects --prompt and --prompt-file together", () => {
 
 test("models list without credentials fails before a network call", () => {
   const dir = mkdtempSync(join(tmpdir(), "neo-"));
-  const env = { ...process.env };
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
   delete env.NEON_AI_GATEWAY_TOKEN;
   delete env.NEON_AI_GATEWAY_BASE_URL;
   const result = neo(["models", "list"], { cwd: dir, env });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain("NEON_AI_GATEWAY_TOKEN");
+  expect(result.stderr).toContain("missing");
+  expect(result.stderr).toContain("providers/neon.json");
 });
 
 test("resolveModelId accepts a catalog id and the fable alias", () => {
@@ -69,4 +74,46 @@ test("resolveModelId accepts a catalog id and the fable alias", () => {
 test("resolveModelId rejects unknown and ambiguous aliases", () => {
   expect(() => resolveModelId("nope", catalog)).toThrow(NeoError);
   expect(() => resolveModelId("5", catalog)).toThrow(/matches/);
+});
+
+test("parseNeonProviderConfig requires apiKey and baseURL", () => {
+  expect(() => parseNeonProviderConfig("nope", "neon.json")).toThrow(/JSON object/);
+  expect(() => parseNeonProviderConfig({}, "neon.json")).toThrow(/apiKey/);
+  expect(
+    parseNeonProviderConfig({ apiKey: "k", baseURL: "https://example.test/" }, "neon.json"),
+  ).toEqual({ apiKey: "k", baseURL: "https://example.test" });
+});
+
+test("loadNeonProviderConfig reads ~/.config/neo/providers/neon.json", () => {
+  const home = mkdtempSync(join(tmpdir(), "neo-home-"));
+  mkdirSync(join(home, ".config", "neo", "providers"), { recursive: true });
+  writeFileSync(
+    join(home, ".config", "neo", "providers", "neon.json"),
+    JSON.stringify({ apiKey: "k", baseURL: "https://example.test", projectId: "ignored" }),
+  );
+  const previousHome = process.env.HOME;
+  const previousToken = process.env.NEON_AI_GATEWAY_TOKEN;
+  const previousUrl = process.env.NEON_AI_GATEWAY_BASE_URL;
+  process.env.HOME = home;
+  delete process.env.NEON_AI_GATEWAY_TOKEN;
+  delete process.env.NEON_AI_GATEWAY_BASE_URL;
+  try {
+    expect(loadNeonProviderConfig()).toEqual({ apiKey: "k", baseURL: "https://example.test" });
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    if (previousToken === undefined) {
+      delete process.env.NEON_AI_GATEWAY_TOKEN;
+    } else {
+      process.env.NEON_AI_GATEWAY_TOKEN = previousToken;
+    }
+    if (previousUrl === undefined) {
+      delete process.env.NEON_AI_GATEWAY_BASE_URL;
+    } else {
+      process.env.NEON_AI_GATEWAY_BASE_URL = previousUrl;
+    }
+  }
 });
