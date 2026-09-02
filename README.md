@@ -1,16 +1,24 @@
 # neo
 
-A minimal lightweight open coding subagent. Private while the loop is being built.
+A minimal lightweight open coding subagent. Private.
 
-Parent agents (Cursor, and later anything else) spawn `neo run` as a subprocess. The child talks to a model the parent cannot host, uses tools in a working directory, and prints the answer on stdout.
+Parent agents spawn `neo` as a subprocess in the working directory they want inspected. The child talks to a model through the Neon AI Gateway, uses tools, and prints the answer on stdout.
 
 ```bash
-bun src/cli.ts run --model fable --prompt "Review this diff" --cwd /path/to/repo
+neo --model fable --prompt "Review this diff"
 ```
 
-`--prompt-file` is the other way in. `--readonly` is the default.
+`--prompt-file` is the other way in. There is no `--cwd`: run neo in the directory that is the working tree. `--readonly` is reserved; v1 has no write tools.
 
-The agent loop is not implemented yet. `neo run` parses flags and exits 2 until it is.
+```bash
+neo models list
+```
+
+prints the live catalog (id and name) from this branch's gateway.
+
+Credentials are `NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL`. A cwd `.env.local` is loaded if present. `neon link` / `neon env pull` write them when `neon.ts` enables `preview.aiGateway`.
+
+v1 does not read AGENTS.md and does not load skills.
 
 ## Design
 
@@ -22,6 +30,7 @@ A layer that currently has one implementation still lives behind that seam. "Let
 
 ```bash
 bun install
+neon link --project-id mute-dawn-75832467 -y
 bun run test
 bun run typecheck
 bun src/cli.ts --help

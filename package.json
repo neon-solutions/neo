@@ -28,13 +28,17 @@
   ],
   "scripts": {
     "dev": "bun src/cli.ts",
-    "build": "tsup src/cli.ts --format esm --dts --clean",
+    "build": "tsup src/cli.ts --format esm --clean",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "fmt": "prettier --write ."
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "@neon/ai-sdk-provider": "^0.9.0",
+    "@neon/config": "^1.2.0",
+    "ai": "^7.0.79",
+    "commander": "^14.0.3",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

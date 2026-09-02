@@ -1,6 +1,11 @@
 # neo
 
-Minimal coding subagent CLI. A parent process (today: Cursor + Grok) shells out to `neo run`; neo prints the answer on stdout and exits.
+Minimal coding subagent CLI. A parent process (today: Cursor + Grok) shells out to `neo`; neo prints the answer on stdout and exits.
+
+```bash
+neo --model fable --prompt "Review this diff"
+neo models list
+```
 
 ## Stack
 
@@ -8,10 +13,12 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 
 ## Product constraints
 
-- Loop: Vercel AI SDK `ToolLoopAgent` / `generateText` with `stopWhen`. Not Mastra. Not Pi.
-- Tools (when the loop lands): `read`, `grep`, `glob`, `bash`. `--readonly` is the default.
+- Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: stepCountIs(20)`. Not Mastra. Not Pi.
+- Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `NEON_AI_GATEWAY_*`, plus cwd `.env.local` if present.
+- Tools: `read`, `grep`, `glob`, `bash`. `--readonly` is reserved; v1 has no write tools.
 - stderr is progress. stdout is the answer.
-- No TUI, sessions, compaction, MCP, or subagents-of-subagents in v0.
+- No TUI, sessions, compaction, MCP, or subagents-of-subagents in v1.
+- Do not read AGENTS.md or load skills unless the user names them.
 
 ## Workflow
 
@@ -26,7 +33,11 @@ Work on `main`. Push `main`. No feature branch, no PR.
 ## Layout
 
 ```text
-src/cli.ts       Commander entry
-src/lib/run.ts   The run() the loop will live in
-tests/           Vitest, real CLI process, no mocks
+src/cli.ts                       Commander entry
+src/lib/run.ts                   ToolLoopAgent loop
+src/lib/gateway.ts               Gateway seam
+src/plugins/neon-ai-gateway.ts   First gateway plugin
+src/plugins/tools.ts             read, grep, glob, bash
+tests/                           Vitest, real CLI process, no mocks
+neon.ts                          preview.aiGateway
 ```
