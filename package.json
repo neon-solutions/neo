@@ -29,6 +29,7 @@
   "scripts": {
     "dev": "bun src/cli.ts",
     "build": "tsup src/cli.ts --format esm --clean",
+    "binary": "mkdir -p \"$HOME/.local/bin\" && scriptc build src/cli.ts --dynamic -o \"$HOME/.local/bin/neo\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "fmt": "prettier --write ."

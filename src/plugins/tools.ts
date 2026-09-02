@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
-import { glob, readFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
 import { tool } from "ai";
 import { z } from "zod";
 import { NeoError } from "../lib/errors";
@@ -24,40 +24,35 @@ function clip(text: string): string {
   return `${text.slice(0, MAX_OUTPUT_CHARS)}\n[truncated]`;
 }
 
-function runCommand(args: {
-  command: string;
-  argv: string[];
-  cwd: string;
-  timeoutMs: number;
-}): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(args.command, args.argv, {
-      cwd: args.cwd,
+function runCommand(args: { command: string; argv: string[]; cwd: string; timeoutMs: number }): {
+  code: number;
+  stdout: string;
+  stderr: string;
+} {
+  const previous = process.cwd();
+  process.chdir(args.cwd);
+  try {
+    const result = spawnSync(args.command, args.argv, {
+      encoding: "utf8",
+      timeout: args.timeoutMs,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-    child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
-
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new NeoError(`neo: ${args.command} timed out after ${args.timeoutMs}ms`));
-    }, args.timeoutMs);
-
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolvePromise({
-        code,
-        stdout: clip(Buffer.concat(stdoutChunks).toString("utf8")),
-        stderr: clip(Buffer.concat(stderrChunks).toString("utf8")),
-      });
-    });
-  });
+    const spawnError = result.error;
+    if (spawnError) {
+      if (spawnError.message.includes("ETIMEDOUT")) {
+        throw new NeoError(`neo: ${args.command} timed out after ${args.timeoutMs}ms`);
+      }
+      throw spawnError;
+    }
+    const status = result.status;
+    return {
+      code: status === null ? 1 : status,
+      stdout: clip(result.stdout),
+      stderr: clip(result.stderr),
+    };
+  } finally {
+    process.chdir(previous);
+  }
 }
 
 export function createTools(cwd: string) {
@@ -80,7 +75,7 @@ export function createTools(cwd: string) {
       }),
       execute: async ({ pattern, path }) => {
         const target = path === undefined ? cwd : resolveUnderCwd(cwd, path);
-        const result = await runCommand({
+        const result = runCommand({
           command: "rg",
           argv: ["-n", "--color", "never", "--", pattern, target],
           cwd,
@@ -101,16 +96,27 @@ export function createTools(cwd: string) {
         pattern: z.string().describe("Glob pattern, for example **/*.ts"),
       }),
       execute: async ({ pattern }) => {
-        const matches: string[] = [];
-        const iterator = glob(pattern, { cwd });
-        for await (const match of iterator) {
-          matches.push(join(cwd, match));
-          if (matches.length >= 200) {
-            matches.push("[truncated]");
-            break;
-          }
+        const result = runCommand({
+          command: "rg",
+          argv: ["--files", "--color", "never", "-g", pattern],
+          cwd,
+          timeoutMs: BASH_TIMEOUT_MS,
+        });
+        if (result.code === 1) {
+          return "no matches";
         }
-        return matches.length === 0 ? "no matches" : matches.join("\n");
+        if (result.code !== 0) {
+          return clip(result.stderr || `rg exited ${result.code}`);
+        }
+        const lines = result.stdout.split("\n").filter((line) => line.length > 0);
+        if (lines.length === 0) {
+          return "no matches";
+        }
+        const shown = lines.slice(0, 200);
+        if (lines.length > 200) {
+          shown.push("[truncated]");
+        }
+        return shown.join("\n");
       },
     }),
     bash: tool({
@@ -119,7 +125,7 @@ export function createTools(cwd: string) {
         command: z.string().describe("Bash command"),
       }),
       execute: async ({ command }) => {
-        const result = await runCommand({
+        const result = runCommand({
           command: "bash",
           argv: ["-lc", command],
           cwd,

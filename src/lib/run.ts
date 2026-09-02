@@ -14,17 +14,6 @@ function summarizeToolInput(input: unknown): string {
   if (typeof input === "string") {
     return input;
   }
-  if (typeof input === "object" && input !== null && !Array.isArray(input)) {
-    const values = Object.values(input).filter(
-      (value): value is string => typeof value === "string",
-    );
-    if (values.length === 1) {
-      const [value] = values;
-      if (value !== undefined) {
-        return value;
-      }
-    }
-  }
   return JSON.stringify(input);
 }
 
@@ -57,7 +46,8 @@ export async function run(request: RunRequest): Promise<string> {
 }
 
 export async function listModels(gateway: Gateway): Promise<string> {
-  const models = [...(await gateway.listModels())].sort((a, b) => a.id.localeCompare(b.id));
+  const listed = await gateway.listModels();
+  const models = listed.slice().sort((a, b) => a.id.localeCompare(b.id));
   const idWidth = models.reduce((width, model) => Math.max(width, model.id.length), 0);
   return models.map((model) => `${model.id.padEnd(idWidth)}  ${model.name}`).join("\n");
 }

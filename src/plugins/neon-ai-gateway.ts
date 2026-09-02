@@ -11,7 +11,8 @@ function parseModel(value: unknown): ModelInfo {
   if (!isRecord(value)) {
     throw new NeoError("neo: gateway /v1/models returned a non-object entry");
   }
-  const { id, name } = value;
+  const id = value.id;
+  const name = value.name;
   if (typeof id !== "string" || id.length === 0) {
     throw new NeoError("neo: gateway /v1/models entry is missing id");
   }
@@ -25,7 +26,12 @@ function parseModelsResponse(value: unknown): ModelInfo[] {
   if (!isRecord(value) || !Array.isArray(value.data)) {
     throw new NeoError("neo: gateway /v1/models did not return a list");
   }
-  return value.data.map(parseModel);
+  const data = value.data;
+  const models: ModelInfo[] = [];
+  for (const entry of data) {
+    models.push(parseModel(entry));
+  }
+  return models;
 }
 
 export function resolveModelId(query: string, models: ModelInfo[]): string {
@@ -65,9 +71,16 @@ export function createNeonGateway(credentials: GatewayCredentials): Gateway {
       const response = await fetch(`${credentials.baseUrl}/v1/models`, {
         headers: { Authorization: `Bearer ${credentials.token}` },
       });
-      const body: unknown = await response.json().catch(() => undefined);
+      const text = await response.text();
       if (!response.ok) {
         throw new NeoError(`neo: gateway /v1/models failed (${response.status})`);
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : "invalid JSON";
+        throw new NeoError(`neo: gateway /v1/models returned non-JSON (${detail})`);
       }
       return parseModelsResponse(body);
     },

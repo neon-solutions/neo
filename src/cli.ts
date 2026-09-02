@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Command, InvalidArgumentError } from "commander";
+import { Command } from "commander";
 import { loadCwdEnv, readGatewayCredentials } from "./lib/env";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
@@ -10,7 +10,7 @@ import { createNeonGateway } from "./plugins/neon-ai-gateway";
 function requireValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    throw new InvalidArgumentError("value must not be empty");
+    throw new NeoError("neo: value must not be empty");
   }
   return trimmed;
 }
@@ -81,11 +81,10 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(process.argv).catch((error: unknown) => {
-  if (error instanceof NeoError || error instanceof InvalidArgumentError) {
+  if (error instanceof NeoError) {
     console.error(error.message);
-    process.exitCode = 1;
-    return;
+    process.exit(1);
   }
   console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
+  process.exit(1);
 });

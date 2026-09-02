@@ -9,13 +9,13 @@ neo models list
 
 ## Stack
 
-Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `strict` + `verbatimModuleSyntax`. No `as` casts.
+Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `strict` + `verbatimModuleSyntax`. No `as` casts. Local binary: `bun run binary` (scriptc `--dynamic`, Node >= 24 to compile) writes `~/.local/bin/neo`.
 
 ## Product constraints
 
 - Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: stepCountIs(20)`. Not Mastra. Not Pi.
 - Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `NEON_AI_GATEWAY_*`, plus cwd `.env.local` if present.
-- Tools: `read`, `grep`, `glob`, `bash`. `--readonly` is reserved; v1 has no write tools.
+- Tools: `read`, `grep`, `glob`, `bash`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` is reserved; v1 has no write tools.
 - stderr is progress. stdout is the answer.
 - No TUI, sessions, compaction, MCP, or subagents-of-subagents in v1.
 - Do not read AGENTS.md or load skills unless the user names them.

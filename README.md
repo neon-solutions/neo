@@ -36,4 +36,14 @@ bun run typecheck
 bun src/cli.ts --help
 ```
 
+Local binary (scriptc, Node >= 24 to compile, clang):
+
+```bash
+npm install -g scriptc
+bun run binary
+neo --help
+```
+
+That writes `~/.local/bin/neo`. `ai` / commander need `--dynamic` (embedded JS engine). Keep `bun src/cli.ts` for day-to-day.
+
 Apache-2.0.
