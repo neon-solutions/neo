@@ -183,7 +183,7 @@ async function main(argv: string[]): Promise<void> {
         if (opts.prompt !== undefined || opts.promptFile !== undefined) {
           throw new NeoError('neo: sub requires a name. Run "neo sub list".');
         }
-        sub.help({ error: true });
+        sub.help();
         return;
       }
       await runSub(name, opts);

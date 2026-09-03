@@ -648,13 +648,16 @@ Body.
   expect(result.stderr).not.toContain("providers/neon.json");
 });
 
-test("neo sub with no name exits 1 with usage on stderr", () => {
-  const result = neo(["sub"]);
-  expect(result.status).toBe(1);
-  expect(result.stderr).toContain("Usage: neo sub");
-  expect(result.stderr).toContain("list");
-  expect(result.stderr).toContain("details");
-  expect(result.stdout).not.toContain("Usage: neo sub");
+test("neo sub with no name is neo sub --help", () => {
+  const bare = neo(["sub"]);
+  const help = neo(["sub", "--help"]);
+  expect(bare.status).toBe(0);
+  expect(bare.status).toBe(help.status);
+  expect(bare.stdout).toBe(help.stdout);
+  expect(bare.stderr).toBe(help.stderr);
+  expect(bare.stdout).toContain("Usage: neo sub");
+  expect(bare.stdout).toContain("list");
+  expect(bare.stdout).toContain("details");
 });
 
 test("neo sub with a prompt but no name asks for the name", () => {
