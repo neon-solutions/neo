@@ -69,3 +69,52 @@ test("agents-md injects the file into the system prompt", () => {
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("neo-agents-md-nonce-7f3a");
 }, 120_000);
+
+test("sub system prompt is injected without the parent pasting it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-live-sub-"));
+  mkdirSync(join(dir, ".git"));
+  mkdirSync(join(dir, ".agents", "subs"), { recursive: true });
+  writeFileSync(
+    join(dir, ".agents", "subs", "e2e-nonce.md"),
+    `---
+description: Repeat a nonce in every answer.
+model: fable
+---
+Include the word kestrel-7f3a in every answer.
+`,
+  );
+  const result = neo(["sub", "e2e-nonce", "--prompt", "Reply with the single word pong."], {
+    cwd: dir,
+  });
+  expect(result.status).toBe(0);
+  expect(result.stdout.toLowerCase()).toContain("pong");
+  expect(result.stdout).toContain("kestrel-7f3a");
+}, 120_000);
+
+test("readonly sub has no write tool", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-live-sub-ro-"));
+  mkdirSync(join(dir, ".git"));
+  mkdirSync(join(dir, ".agents", "subs"), { recursive: true });
+  writeFileSync(
+    join(dir, ".agents", "subs", "e2e-readonly.md"),
+    `---
+description: Readonly check.
+model: fable
+readonly: true
+---
+You have no write or edit tools.
+`,
+  );
+  const result = neo(
+    [
+      "sub",
+      "e2e-readonly",
+      "--prompt",
+      "Do not use bash. Create ping.txt containing ping using the write tool. If no write tool exists, reply with exactly NO-WRITE-TOOL.",
+    ],
+    { cwd: dir },
+  );
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("NO-WRITE-TOOL");
+  expect(() => readFileSync(join(dir, "ping.txt"), "utf8")).toThrow();
+}, 120_000);

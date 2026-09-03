@@ -23,6 +23,28 @@ neo models list
 
 prints the live catalog (id and name) from this branch's gateway.
 
+```bash
+neo sub list
+neo sub pr-review --prompt "Review PR 123. One concern: the CLI."
+```
+
+A **sub** is a named launch template: model, flags, optional cwd, and a system prompt, so the parent supplies only the task prompt. `neo sub list` prints names and descriptions, never the system prompt. Launch flags (`--model`, `--readonly`, `--agents-md`, `--skills`) cannot be overridden; they live in the file.
+
+Discovery: `.agents/subs/<name>.md` from the invocation directory up to the git root, then `~/.agents/subs/<name>.md`. Project shadows global. User-wide jobs belong under `~/.agents/subs/` so they resolve from a nested clone. A sub may pin `cwd` for the run (`--agents-md` and `--skills` walk that directory); there is still no `--cwd` flag.
+
+```markdown
+---
+description: Critical engineering review of an open PR. Give it the repo path, the PR number or URL, and the PR's one concern.
+model: sol
+cwd: ~/workspaces
+readonly: true
+agents-md: true
+skills: true
+---
+
+You are running a critical engineering review of one pull request.
+```
+
 The Neon gateway plugin reads `~/.config/neo/providers/neon.json`:
 
 ```json

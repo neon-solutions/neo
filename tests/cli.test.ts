@@ -39,6 +39,7 @@ test("prints help", () => {
   expect(result.stdout).toContain("--readonly");
   expect(result.stdout).toContain("omit write and edit");
   expect(result.stdout).toContain("models");
+  expect(result.stdout).toContain("sub");
   expect(result.stdout).not.toContain("reserved");
   expect(result.stdout).not.toContain("  run ");
 });

@@ -18,6 +18,7 @@ export type RunRequest = {
   readonly: boolean;
   agentsMd: boolean;
   skills: boolean;
+  subPrompt?: string;
 };
 
 export type InstructionArgs = {
@@ -25,6 +26,7 @@ export type InstructionArgs = {
   readonly: boolean;
   agentsMd?: string;
   skillsCatalog?: string;
+  subPrompt?: string;
 };
 
 export function buildInstructions(args: InstructionArgs): string {
@@ -52,6 +54,10 @@ export function buildInstructions(args: InstructionArgs): string {
     parts.push("Do not load AGENTS.md unless the user names them.");
   } else if (args.skillsCatalog === undefined) {
     parts.push("Do not load skill files unless the user names them.");
+  }
+
+  if (args.subPrompt !== undefined) {
+    parts.push(args.subPrompt);
   }
 
   parts.push("The final message is the answer.");
@@ -82,6 +88,7 @@ export async function run(request: RunRequest): Promise<string> {
       readonly: request.readonly,
       agentsMd,
       skillsCatalog: discovered === undefined ? undefined : formatSkillsCatalog(discovered),
+      subPrompt: request.subPrompt,
     }),
     tools,
     stopWhen: stepCountIs(20),

@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
 import { createNeonGateway } from "./plugins/neon-ai-gateway";
+import { discoverSubs, formatSubsList, missingSubMessage } from "./plugins/subs";
 
 function requireValue(value: string): string {
   const trimmed = value.trim();
@@ -14,14 +15,42 @@ function requireValue(value: string): string {
   return trimmed;
 }
 
-type RunOptions = {
-  model?: string;
+type PromptOptions = {
   prompt?: string;
   promptFile?: string;
+};
+
+type RunOptions = PromptOptions & {
+  model?: string;
   readonly: boolean;
   agentsMd: boolean;
   skills: boolean;
 };
+
+const ROOT_LAUNCH_FLAGS = ["model", "readonly", "agentsMd", "skills"] as const;
+
+function readPrompt(opts: PromptOptions): string {
+  if (opts.prompt !== undefined && opts.promptFile !== undefined) {
+    throw new NeoError("neo: use --prompt or --prompt-file, not both");
+  }
+  const fromFile =
+    opts.promptFile === undefined ? undefined : readFileSync(resolve(opts.promptFile), "utf8");
+  const prompt = (opts.prompt ?? fromFile ?? "").trim();
+  if (prompt.length === 0) {
+    throw new NeoError("neo requires --prompt (or --prompt-file)");
+  }
+  return prompt;
+}
+
+function assertSealedRootFlags(program: Command): void {
+  for (const flag of ROOT_LAUNCH_FLAGS) {
+    if (program.getOptionValueSource(flag) === "cli") {
+      throw new NeoError(
+        "neo: sub templates are sealed; do not pass --model, --readonly, --agents-md, or --skills",
+      );
+    }
+  }
+}
 
 async function runAgent(opts: RunOptions): Promise<void> {
   if (opts.prompt !== undefined && opts.promptFile !== undefined) {
@@ -42,12 +71,41 @@ async function runAgent(opts: RunOptions): Promise<void> {
     agentsMd: opts.agentsMd,
     skills: opts.skills,
   });
-  process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+  writeAnswer(text);
+}
+
+async function runSub(name: string, opts: PromptOptions): Promise<void> {
+  const prompt = readPrompt(opts);
+  const subs = await discoverSubs({ cwd: process.cwd() });
+  const sub = subs.find((entry) => entry.name === name);
+  if (sub === undefined) {
+    throw new NeoError(missingSubMessage(name, subs));
+  }
+
+  const text = await run({
+    model: sub.model,
+    cwd: sub.cwd ?? process.cwd(),
+    prompt,
+    readonly: sub.readonly,
+    agentsMd: sub.agentsMd,
+    skills: sub.skills,
+    subPrompt: sub.systemPrompt,
+  });
+  writeAnswer(text);
 }
 
 async function printModels(): Promise<void> {
   const gateway = createNeonGateway();
   const text = await listModels(gateway);
+  writeAnswer(text);
+}
+
+async function printSubs(): Promise<void> {
+  const subs = await discoverSubs({ cwd: process.cwd() });
+  writeAnswer(formatSubsList(subs));
+}
+
+function writeAnswer(text: string): void {
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
 }
 
@@ -57,6 +115,7 @@ async function main(argv: string[]): Promise<void> {
     .name("neo")
     .description("A minimal lightweight open coding subagent.")
     .showHelpAfterError()
+    .enablePositionalOptions()
     .option("-m, --model <id>", "model id (catalog id or alias, for example fable)", requireValue)
     .option("-p, --prompt <text>", "prompt text")
     .option("--prompt-file <path>", "read the prompt from a file")
@@ -83,6 +142,28 @@ async function main(argv: string[]): Promise<void> {
     .description("List model ids and names available on this gateway")
     .action(async () => {
       await printModels();
+    });
+
+  const sub = program.command("sub").description("Run a named launch template");
+  sub.enablePositionalOptions();
+  sub
+    .command("list")
+    .description("List available subs")
+    .action(async () => {
+      assertSealedRootFlags(program);
+      await printSubs();
+    });
+  sub
+    .argument("[name]", "sub name")
+    .option("-p, --prompt <text>", "prompt text")
+    .option("--prompt-file <path>", "read the prompt from a file")
+    .action(async (name: string | undefined, opts: PromptOptions) => {
+      if (name === undefined) {
+        sub.help();
+        return;
+      }
+      assertSealedRootFlags(program);
+      await runSub(name, opts);
     });
 
   await program.parseAsync(argv);

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { tool } from "ai";
 import { z } from "zod";
+import { splitFrontmatter } from "../lib/frontmatter";
 import { clip, errorCode, resolveUnderRoot, walkToGitRoot } from "../lib/paths";
 
 const PROJECT_SKILL_SEGMENTS = [
@@ -49,28 +50,13 @@ export type SkillSearchHit = {
 type SkillLookup = { skill: SkillRecord } | { error: string };
 
 export function parseSkillMd(text: string): ParsedSkillMd | undefined {
-  const source = text.startsWith("\uFEFF") ? text.slice(1) : text;
-  const lines = source.split(/\r?\n/);
-  const first = lines[0];
-  if (first === undefined || first.trim() !== "---") {
+  const split = splitFrontmatter(text);
+  if (split === undefined) {
     return undefined;
   }
 
-  let close = -1;
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (line !== undefined && line.trim() === "---") {
-      close = i;
-      break;
-    }
-  }
-  if (close === -1) {
-    return undefined;
-  }
-
-  const fields = parseYamlMap(lines.slice(1, close));
-  const name = fields.get("name");
-  const description = fields.get("description");
+  const name = split.fields.get("name");
+  const description = split.fields.get("description");
   if (name === undefined || description === undefined) {
     return undefined;
   }
@@ -84,7 +70,7 @@ export function parseSkillMd(text: string): ParsedSkillMd | undefined {
   return {
     name,
     description,
-    body: lines.slice(close + 1).join("\n"),
+    body: split.body,
   };
 }
 
@@ -464,137 +450,4 @@ function escapeXml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
-}
-
-function parseYamlMap(lines: string[]): Map<string, string> {
-  const fields = new Map<string, string>();
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line === undefined) {
-      break;
-    }
-    i += 1;
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("#")) {
-      continue;
-    }
-    const match = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-    if (match === null) {
-      continue;
-    }
-    const key = match[1];
-    const raw = match[2];
-    if (key === undefined) {
-      continue;
-    }
-    const indicator = (raw ?? "").trim();
-    if (
-      indicator === ">" ||
-      indicator === ">-" ||
-      indicator === ">+" ||
-      indicator === "|" ||
-      indicator === "|-" ||
-      indicator === "|+"
-    ) {
-      const collected: string[] = [];
-      while (i < lines.length) {
-        const next = lines[i];
-        if (next === undefined) {
-          break;
-        }
-        if (next.length === 0 || next.startsWith(" ") || next.startsWith("\t")) {
-          collected.push(next);
-          i += 1;
-          continue;
-        }
-        break;
-      }
-      const folded = indicator.startsWith(">");
-      fields.set(key, folded ? foldYaml(collected) : literalYaml(collected));
-      continue;
-    }
-    fields.set(key, unquoteYaml(stripYamlComment(raw ?? "").trim()));
-  }
-  return fields;
-}
-
-function stripYamlComment(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
-    return raw;
-  }
-  const hash = raw.indexOf(" #");
-  if (hash === -1) {
-    return raw;
-  }
-  return raw.slice(0, hash);
-}
-
-function unquoteYaml(value: string): string {
-  if (value.length < 2) {
-    return value;
-  }
-  const start = value.charAt(0);
-  const end = value.charAt(value.length - 1);
-  if ((start === '"' && end === '"') || (start === "'" && end === "'")) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-function commonIndent(lines: string[]): number {
-  let min: number | undefined;
-  for (const line of lines) {
-    if (line.trim().length === 0) {
-      continue;
-    }
-    const match = /^[ \t]*/.exec(line);
-    const n = match === null ? 0 : match[0].length;
-    if (min === undefined || n < min) {
-      min = n;
-    }
-  }
-  return min ?? 0;
-}
-
-function stripIndent(lines: string[], indent: number): string[] {
-  return lines.map((line) => {
-    if (line.length === 0) {
-      return line;
-    }
-    let n = 0;
-    while (n < indent && n < line.length) {
-      const ch = line.charAt(n);
-      if (ch !== " " && ch !== "\t") {
-        break;
-      }
-      n += 1;
-    }
-    return line.slice(n);
-  });
-}
-
-function foldYaml(lines: string[]): string {
-  const stripped = stripIndent(lines, commonIndent(lines));
-  const paragraphs: string[] = [];
-  let current: string[] = [];
-  for (const line of stripped) {
-    if (line.trim().length === 0) {
-      if (current.length > 0) {
-        paragraphs.push(current.join(" "));
-        current = [];
-      }
-      continue;
-    }
-    current.push(line.trim());
-  }
-  if (current.length > 0) {
-    paragraphs.push(current.join(" "));
-  }
-  return paragraphs.join("\n\n");
-}
-
-function literalYaml(lines: string[]): string {
-  return stripIndent(lines, commonIndent(lines)).join("\n").replace(/\n+$/u, "");
 }

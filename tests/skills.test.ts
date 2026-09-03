@@ -45,6 +45,17 @@ Do the thing.
   });
 });
 
+test("parseSkillMd last duplicate key wins", () => {
+  const parsed = parseSkillMd(`---
+name: demo-skill
+description: first
+description: second
+---
+body
+`);
+  expect(parsed?.description).toBe("second");
+});
+
 test("parseSkillMd rejects missing frontmatter, bad names, and empty descriptions", () => {
   expect(parseSkillMd("# no frontmatter")).toBeUndefined();
   expect(
@@ -198,4 +209,17 @@ test("buildInstructions drops the skip line for each enabled plugin", () => {
   expect(withSkills).toContain("Skills are NOT tools");
   expect(withSkills).toContain("Do not load AGENTS.md unless the user names them.");
   expect(withSkills).not.toContain("Do not load skill files unless the user names them.");
+
+  const withSub = buildInstructions({
+    cwd: "/tmp/x",
+    readonly: true,
+    agentsMd: "# AGENTS.md\n\nrepo rules",
+    subPrompt: "You are the pr-review sub.",
+  });
+  const agentsAt = withSub.indexOf("repo rules");
+  const subAt = withSub.indexOf("You are the pr-review sub.");
+  const finalAt = withSub.indexOf("The final message is the answer.");
+  expect(agentsAt).toBeGreaterThan(-1);
+  expect(subAt).toBeGreaterThan(agentsAt);
+  expect(finalAt).toBeGreaterThan(subAt);
 });
