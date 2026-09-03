@@ -1,6 +1,19 @@
 # neo
 
-A minimal lightweight open coding subagent. Private.
+A minimal lightweight open coding subagent.
+
+```bash
+mkdir -p ~/.local/bin
+tmp="$(mktemp)"
+curl -fsSL -o "$tmp" \
+  "https://github.com/neon-solutions/neo/releases/download/latest/neo-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+chmod +x "$tmp"
+mv "$tmp" ~/.local/bin/neo
+export PATH="$HOME/.local/bin:$PATH"
+neo --help
+```
+
+Binaries: `neo-darwin-arm64`, `neo-linux-x86_64`. Each push to `main` replaces the rolling GitHub Release tag `latest`. `grep` and `glob` shell out to `rg`, so `rg` must be on PATH.
 
 Parent agents spawn `neo` as a subprocess in the working directory they want inspected. The child talks to a model through the Neon AI Gateway, uses tools, and prints the answer on stdout.
 

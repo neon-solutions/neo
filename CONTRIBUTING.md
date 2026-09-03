@@ -1,6 +1,6 @@
 # Contributing
 
-This repo is private. If you have access, treat it like any other neon-solutions CLI.
+Treat this like any other neon-solutions CLI.
 
 ## Setup
 
@@ -17,7 +17,7 @@ Bun is the package manager. Node.js 22+ is the runtime. Live tests need `~/.conf
 
 Work on `main`. Push `main`. No feature branch, no PR. Keep a commit to one concern. Tests use Vitest against the real CLI (`bun src/cli.ts`); do not mock the filesystem or the process.
 
-`bun run fmt` before you push.
+`bun run fmt` before you push. CI on `main` runs `bun run test:ci` (everything except `tests/live.test.ts`) plus typecheck, then publishes binaries. `bun run test` including live tests remains the pre-push gate.
 
 ## Plugins
 

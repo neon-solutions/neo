@@ -31,6 +31,7 @@
     "build": "tsup src/cli.ts --format esm --clean",
     "binary": "mkdir -p \"$HOME/.local/bin\" && scriptc build src/cli.ts --dynamic -o \"$HOME/.local/bin/neo\"",
     "test": "vitest run",
+    "test:ci": "vitest run --exclude tests/live.test.ts",
     "typecheck": "tsc --noEmit",
     "fmt": "prettier --write ."
   },

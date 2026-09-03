@@ -35,7 +35,7 @@ Work on `main`. Push `main`. No feature branch, no PR.
 2. Implement. Keep the commit to one concern.
 3. `bun run test` and `bun run typecheck`.
 4. `bun run fmt`.
-5. `git push origin main`.
+5. `git push origin main`. That push runs `.github/workflows/publish.yml`: typecheck, `bun run test:ci` (non-live), scriptc binaries for linux-x86_64 and darwin-arm64, then clobber the rolling `latest` GitHub Release. A red run is a finding to fix, not a reason to re-push past it.
 
 ## Layout
 
@@ -52,5 +52,6 @@ src/plugins/tools.ts             read, grep, glob, ls, bash, write, edit
 src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools)
 src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)
 tests/                           Vitest, real CLI process, no mocks
+.github/workflows/publish.yml    push to main → rolling `latest` release
 neon.ts                          preview.aiGateway
 ```
