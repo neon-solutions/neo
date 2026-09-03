@@ -34,7 +34,12 @@ test("prints help", () => {
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("minimal lightweight open coding subagent");
   expect(result.stdout).toContain("--model");
+  expect(result.stdout).toContain("--agents-md");
+  expect(result.stdout).toContain("--skills");
+  expect(result.stdout).toContain("--readonly");
+  expect(result.stdout).toContain("omit write and edit");
   expect(result.stdout).toContain("models");
+  expect(result.stdout).not.toContain("reserved");
   expect(result.stdout).not.toContain("  run ");
 });
 
@@ -42,6 +47,29 @@ test("requires a model and prompt", () => {
   const result = neo([]);
   expect(result.status).not.toBe(0);
   expect(`${result.stdout}${result.stderr}`).toMatch(/--model/);
+});
+
+test("--agents-md with no file fails before credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-"));
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
+  const result = neo(["--agents-md", "--model", "fable", "--prompt", "x"], { cwd: dir, env });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("no AGENTS.md");
+  expect(result.stderr).not.toContain("missing");
+});
+
+test("--agents-md with a file reaches the credential check", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-"));
+  writeFileSync(join(dir, "AGENTS.md"), "# hi\n");
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
+  const result = neo(["--agents-md", "--model", "fable", "--prompt", "x"], { cwd: dir, env });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("missing");
+  expect(result.stderr).toContain("providers/neon.json");
 });
 
 test("rejects --prompt and --prompt-file together", () => {

@@ -19,6 +19,8 @@ type RunOptions = {
   prompt?: string;
   promptFile?: string;
   readonly: boolean;
+  agentsMd: boolean;
+  skills: boolean;
 };
 
 async function runAgent(opts: RunOptions): Promise<void> {
@@ -32,13 +34,13 @@ async function runAgent(opts: RunOptions): Promise<void> {
     throw new NeoError("neo requires --model and --prompt (or --prompt-file)");
   }
 
-  const cwd = process.cwd();
-  const gateway = createNeonGateway();
   const text = await run({
     model: opts.model,
-    cwd,
+    cwd: process.cwd(),
     prompt,
-    gateway,
+    readonly: opts.readonly,
+    agentsMd: opts.agentsMd,
+    skills: opts.skills,
   });
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
 }
@@ -58,8 +60,18 @@ async function main(argv: string[]): Promise<void> {
     .option("-m, --model <id>", "model id (catalog id or alias, for example fable)", requireValue)
     .option("-p, --prompt <text>", "prompt text")
     .option("--prompt-file <path>", "read the prompt from a file")
-    .option("--readonly", "reserved; v1 has no write tools", true)
+    .option("--readonly", "omit write and edit tools (bash can still mutate)", false)
     .option("--no-readonly")
+    .option(
+      "--agents-md",
+      "load AGENTS.md files from the working directory up to the git root into the system prompt",
+      false,
+    )
+    .option(
+      "--skills",
+      "discover Agent Skills and attach skill, skill_search, and skill_read",
+      false,
+    )
     .action(async (opts: RunOptions) => {
       await runAgent(opts);
     });

@@ -6,9 +6,16 @@ Parent agents spawn `neo` as a subprocess in the working directory they want ins
 
 ```bash
 neo --model fable --prompt "Review this diff"
+neo --agents-md --skills --model fable --prompt "Implement the spec"
 ```
 
-`--prompt-file` is the other way in. There is no `--cwd`: run neo in the directory that is the working tree. `--readonly` is reserved; v1 has no write tools.
+`--prompt-file` is the other way in. There is no `--cwd`: run neo in the directory that is the working tree.
+
+`--readonly` omits `write` and `edit`. `bash` can still mutate.
+
+`--agents-md` walks from the working directory up to the git root, loads every `AGENTS.md`, and concatenates farthest first so nearer files win. It fails if none are found.
+
+`--skills` discovers Agent Skills from project `.agents/skills`, `.claude/skills`, and `.mastracode/skills` (cwd to git root) plus the same folders under `$HOME`, then attaches `skill`, `skill_search`, and `skill_read`.
 
 ```bash
 neo models list
@@ -26,8 +33,6 @@ The Neon gateway plugin reads `~/.config/neo/providers/neon.json`:
 ```
 
 `NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL` override the file when both are set. Other gateway plugins pick their own filename under `~/.config/neo/providers/`.
-
-v1 does not read AGENTS.md and does not load skills.
 
 ## Design
 

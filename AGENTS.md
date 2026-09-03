@@ -4,6 +4,7 @@ Minimal coding subagent CLI. A parent process (today: Cursor + Grok) shells out 
 
 ```bash
 neo --model fable --prompt "Review this diff"
+neo --agents-md --skills --model fable --prompt "Implement the spec"
 neo models list
 ```
 
@@ -15,10 +16,12 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 
 - Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: stepCountIs(20)`. Not Mastra. Not Pi.
 - Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `~/.config/neo/providers/neon.json` (`apiKey`, `baseURL`). `NEON_AI_GATEWAY_*` overrides when both are set.
-- Tools: `read`, `grep`, `glob`, `bash`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` is reserved; v1 has no write tools.
+- Tools: `read`, `grep`, `glob`, `ls`, `bash`, plus `write` and `edit` unless `--readonly`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` omits `write` and `edit`; `bash` can still mutate.
+- `--agents-md` loads every `AGENTS.md` from cwd up to the git root (farthest first). Fails if none exist. Off by default.
+- `--skills` discovers Agent Skills (Mastra layout and `skill` / `skill_search` / `skill_read` tools) and injects the catalog. Off by default.
 - stderr is progress. stdout is the answer.
 - No TUI, sessions, compaction, MCP, or subagents-of-subagents in v1.
-- Do not read AGENTS.md or load skills unless the user names them.
+- Do not read AGENTS.md or load skills unless the matching flag is set or the user names them.
 
 ## Workflow
 
@@ -36,8 +39,12 @@ Work on `main`. Push `main`. No feature branch, no PR.
 src/cli.ts                       Commander entry
 src/lib/run.ts                   ToolLoopAgent loop
 src/lib/gateway.ts               Gateway seam
+src/lib/agents-md.ts             --agents-md walk-up loader
+src/lib/edit.ts                  unique non-overlapping replacements
+src/lib/paths.ts                 cwd/git-root path guards
 src/plugins/neon-ai-gateway.ts   First gateway plugin (~/.config/neo/providers/neon.json)
-src/plugins/tools.ts             read, grep, glob, bash
+src/plugins/tools.ts             read, grep, glob, ls, bash, write, edit
+src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools)
 tests/                           Vitest, real CLI process, no mocks
 neon.ts                          preview.aiGateway
 ```

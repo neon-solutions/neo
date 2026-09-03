@@ -25,4 +25,4 @@ Capabilities are plugins. Keep the core limited to the loop, the CLI, and plugin
 
 The first implementation of a layer is that layer's first plugin. "Let's only support the Neon AI Gateway for now" means the gateway layer starts with a Neon AI Gateway plugin. If the seam does not exist yet, add the seam with the plugin.
 
-See `AGENTS.md` for the product constraints (AI SDK loop, Neon AI Gateway plugin, no AGENTS.md/skills by default).
+See `AGENTS.md` for the product constraints (AI SDK loop, Neon AI Gateway plugin, `--agents-md` and `--skills` off by default).
