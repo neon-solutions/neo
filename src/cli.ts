@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
 import { createNeonGateway } from "./plugins/neon-ai-gateway";
-import { discoverSubs, formatSubsList, missingSubMessage } from "./plugins/subs";
+import { discoverSubs, formatSubDetails, formatSubsList, missingSubMessage } from "./plugins/subs";
 
 function requireValue(value: string): string {
   const trimmed = value.trim();
@@ -105,6 +105,15 @@ async function printSubs(): Promise<void> {
   writeAnswer(formatSubsList(subs));
 }
 
+async function printSubDetails(name: string): Promise<void> {
+  const subs = await discoverSubs({ cwd: process.cwd() });
+  const sub = subs.find((entry) => entry.name === name);
+  if (sub === undefined) {
+    throw new NeoError(missingSubMessage(name, subs));
+  }
+  writeAnswer(formatSubDetails(sub));
+}
+
 function writeAnswer(text: string): void {
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
 }
@@ -152,6 +161,14 @@ async function main(argv: string[]): Promise<void> {
     .action(async () => {
       assertSealedRootFlags(program);
       await printSubs();
+    });
+  sub
+    .command("details")
+    .description("Print a sub's full template")
+    .argument("<name>", "sub name")
+    .action(async (name: string) => {
+      assertSealedRootFlags(program);
+      await printSubDetails(name);
     });
   sub
     .argument("[name]", "sub name")

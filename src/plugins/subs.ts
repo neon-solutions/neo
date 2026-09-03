@@ -8,7 +8,7 @@ import { isSkillName } from "./skills";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 const LIST_WRAP = 78;
-const RESERVED_NAMES = new Set(["list", "help"]);
+const RESERVED_NAMES = new Set(["list", "help", "details"]);
 const KNOWN_KEYS = new Set(["description", "model", "cwd", "readonly", "agents-md", "skills"]);
 
 export type ParsedSub = {
@@ -167,6 +167,33 @@ export function formatSubsList(subs: SubRecord[], home?: string): string {
       return `${header}\n${wrapPrefixed(sub.description, "  ", LIST_WRAP)}`;
     })
     .join("\n\n");
+}
+
+export function formatSubDetails(sub: SubRecord, home?: string): string {
+  const homeDir = home ?? homedir();
+  const frontmatter = ["---", `description: ${sub.description}`, `model: ${sub.model}`];
+  if (sub.cwd !== undefined) {
+    frontmatter.push(`cwd: ${displayHome(sub.cwd, homeDir)}`);
+  }
+  if (sub.readonly) {
+    frontmatter.push("readonly: true");
+  }
+  if (sub.agentsMd) {
+    frontmatter.push("agents-md: true");
+  }
+  if (sub.skills) {
+    frontmatter.push("skills: true");
+  }
+  frontmatter.push("---");
+  return [
+    `${sub.name}  (${sub.source})`,
+    sub.path,
+    "",
+    "Pass only the task brief in --prompt. Do not repeat the system prompt.",
+    "",
+    ...frontmatter,
+    sub.systemPrompt,
+  ].join("\n");
 }
 
 export function missingSubMessage(name: string, subs: SubRecord[]): string {

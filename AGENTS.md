@@ -7,6 +7,7 @@ neo --model fable --prompt "Review this diff"
 neo --agents-md --skills --model fable --prompt "Implement the spec"
 neo models list
 neo sub list
+neo sub details pr-review
 neo sub pr-review --prompt "Review PR 123. One concern: the CLI."
 ```
 
@@ -21,7 +22,7 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 - Tools: `read`, `grep`, `glob`, `ls`, `bash`, plus `write` and `edit` unless `--readonly`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` omits `write` and `edit`; `bash` can still mutate.
 - `--agents-md` loads every `AGENTS.md` from cwd up to the git root (farthest first). Fails if none exist. Off by default.
 - `--skills` discovers Agent Skills (Mastra layout and `skill` / `skill_search` / `skill_read` tools) and injects the catalog. Off by default.
-- `neo sub <name>` loads a launch template from `.agents/subs/<name>.md` (cwd to git root) or `~/.agents/subs/<name>.md`. Frontmatter pins model, flags, and optional cwd; the body is the system prompt. `list` prints names and descriptions, never the body. Templates are sealed: do not pass `--model` / `--readonly` / `--agents-md` / `--skills` on a sub launch. Off until a matching file exists; neo ships none.
+- `neo sub <name>` loads a launch template from `.agents/subs/<name>.md` (cwd to git root) or `~/.agents/subs/<name>.md`. Frontmatter pins model, flags, and optional cwd; the body is the system prompt. `list` prints names and descriptions, never the body. `details <name>` prints the full template so the parent knows what not to repeat in `--prompt`. Templates are sealed: do not pass `--model` / `--readonly` / `--agents-md` / `--skills` on a sub launch. Off until a matching file exists; neo ships none.
 - stderr is progress. stdout is the answer.
 - No TUI, sessions, compaction, MCP, or subagents-of-subagents in v1. A sub is a parent-facing launch template, not neo spawning neo.
 - Do not read AGENTS.md or load skills unless the matching flag is set or the user names them.

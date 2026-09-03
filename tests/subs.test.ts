@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, test } from "vitest";
 import { NeoError } from "../src/lib/errors";
-import { discoverSubs, formatSubsList, parseSubMd } from "../src/plugins/subs";
+import { discoverSubs, formatSubDetails, formatSubsList, parseSubMd } from "../src/plugins/subs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(root, "src/cli.ts");
@@ -265,6 +265,36 @@ test("formatSubsList prints meta and description, not the body", () => {
   expect(listed).not.toContain("BODY-NONCE-kestrel");
 });
 
+test("formatSubDetails prints the full template and the do-not-repeat line", () => {
+  const details = formatSubDetails(
+    {
+      name: "pr-review",
+      description: "Critical engineering review of an open PR.",
+      model: "sol",
+      cwd: "/Users/me/workspaces",
+      readonly: true,
+      agentsMd: true,
+      skills: true,
+      systemPrompt: "BODY-NONCE-kestrel",
+      path: "/tmp/pr-review.md",
+      source: "project",
+    },
+    "/Users/me",
+  );
+  expect(details).toContain("pr-review  (project)");
+  expect(details).toContain("/tmp/pr-review.md");
+  expect(details).toContain(
+    "Pass only the task brief in --prompt. Do not repeat the system prompt.",
+  );
+  expect(details).toContain("description: Critical engineering review of an open PR.");
+  expect(details).toContain("model: sol");
+  expect(details).toContain("cwd: ~/workspaces");
+  expect(details).toContain("readonly: true");
+  expect(details).toContain("agents-md: true");
+  expect(details).toContain("skills: true");
+  expect(details).toContain("BODY-NONCE-kestrel");
+});
+
 test("discoverSubs expands ~ cwd and skips a shadowed global", async () => {
   const cwd = tmp();
   const home = tmp();
@@ -522,6 +552,26 @@ Body.
   expect(result.stderr).toContain("reserved");
 });
 
+test("reserved details.md fails on any sub invocation", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  const path = writeSub(
+    cwd,
+    "details",
+    `---
+description: Reserved.
+model: fable
+---
+Body.
+`,
+  );
+  const result = neo(["sub", "details", "details"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain(path);
+  expect(result.stderr).toContain("reserved");
+});
+
 test("broken frontmatter fails list loudly", () => {
   const cwd = tmp();
   const home = tmp();
@@ -596,4 +646,58 @@ test("neo sub with no name prints help", () => {
   const result = neo(["sub"]);
   expect(result.status).toBe(0);
   expect(`${result.stdout}${result.stderr}`).toContain("list");
+  expect(`${result.stdout}${result.stderr}`).toContain("details");
+});
+
+test("neo sub details prints the body and the do-not-repeat line", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  const path = writeSub(
+    cwd,
+    "pr-review",
+    `---
+description: Project review sub.
+model: sol
+readonly: true
+---
+SECRET-BODY-ONE
+`,
+  );
+  const result = neo(["sub", "details", "pr-review"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("pr-review  (project)");
+  expect(result.stdout).toContain(path);
+  expect(result.stdout).toContain(
+    "Pass only the task brief in --prompt. Do not repeat the system prompt.",
+  );
+  expect(result.stdout).toContain("SECRET-BODY-ONE");
+  expect(result.stdout).toContain("readonly: true");
+  expect(result.stdout).not.toContain("agents-md: true");
+});
+
+test("neo sub details unknown name lists available subs", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  writeSub(
+    cwd,
+    "pr-review",
+    `---
+description: Review.
+model: sol
+---
+Body.
+`,
+  );
+  const result = neo(["sub", "details", "nope"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("not found");
+  expect(result.stderr).toContain("pr-review");
+});
+
+test("neo sub details requires a name", () => {
+  const result = neo(["sub", "details"]);
+  expect(result.status).not.toBe(0);
+  expect(`${result.stdout}${result.stderr}`).toMatch(/name|required|missing/i);
 });
