@@ -75,12 +75,12 @@ async function runAgent(opts: RunOptions): Promise<void> {
 }
 
 async function runSub(name: string, opts: PromptOptions): Promise<void> {
-  const prompt = readPrompt(opts);
   const subs = await discoverSubs({ cwd: process.cwd() });
   const sub = subs.find((entry) => entry.name === name);
   if (sub === undefined) {
     throw new NeoError(missingSubMessage(name, subs));
   }
+  const prompt = readPrompt(opts);
 
   const text = await run({
     model: sub.model,
@@ -129,7 +129,6 @@ async function main(argv: string[]): Promise<void> {
     .option("-p, --prompt <text>", "prompt text")
     .option("--prompt-file <path>", "read the prompt from a file")
     .option("--readonly", "omit write and edit tools (bash can still mutate)", false)
-    .option("--no-readonly")
     .option(
       "--agents-md",
       "load AGENTS.md files from the working directory up to the git root into the system prompt",
@@ -175,11 +174,18 @@ async function main(argv: string[]): Promise<void> {
     .option("-p, --prompt <text>", "prompt text")
     .option("--prompt-file <path>", "read the prompt from a file")
     .action(async (name: string | undefined, opts: PromptOptions) => {
-      if (name === undefined) {
+      if (name === "help") {
         sub.help();
         return;
       }
       assertSealedRootFlags(program);
+      if (name === undefined) {
+        if (opts.prompt !== undefined || opts.promptFile !== undefined) {
+          throw new NeoError('neo: sub requires a name. Run "neo sub list".');
+        }
+        sub.help({ error: true });
+        return;
+      }
       await runSub(name, opts);
     });
 

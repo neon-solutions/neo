@@ -433,10 +433,16 @@ model: sol
 Body.
 `,
   );
-  const result = neo(["sub", "nope", "--prompt", "x"], { cwd, env: isolatedEnv(home) });
-  expect(result.status).toBe(1);
-  expect(result.stderr).toContain("not found");
-  expect(result.stderr).toContain("pr-review");
+  const withPrompt = neo(["sub", "nope", "--prompt", "x"], { cwd, env: isolatedEnv(home) });
+  expect(withPrompt.status).toBe(1);
+  expect(withPrompt.stderr).toContain("not found");
+  expect(withPrompt.stderr).toContain("pr-review");
+
+  const withoutPrompt = neo(["sub", "nope"], { cwd, env: isolatedEnv(home) });
+  expect(withoutPrompt.status).toBe(1);
+  expect(withoutPrompt.stderr).toContain("not found");
+  expect(withoutPrompt.stderr).toContain("pr-review");
+  expect(withoutPrompt.stderr).not.toContain("requires --prompt");
 });
 
 test("neo sub requires a prompt before credentials", () => {
@@ -642,11 +648,28 @@ Body.
   expect(result.stderr).not.toContain("providers/neon.json");
 });
 
-test("neo sub with no name prints help", () => {
+test("neo sub with no name exits 1 with usage on stderr", () => {
   const result = neo(["sub"]);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Usage: neo sub");
+  expect(result.stderr).toContain("list");
+  expect(result.stderr).toContain("details");
+  expect(result.stdout).not.toContain("Usage: neo sub");
+});
+
+test("neo sub with a prompt but no name asks for the name", () => {
+  const result = neo(["sub", "--prompt", "x"]);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("requires a name");
+  expect(result.stderr).toContain("neo sub list");
+});
+
+test("neo sub help prints sub help", () => {
+  const result = neo(["sub", "help"]);
   expect(result.status).toBe(0);
-  expect(`${result.stdout}${result.stderr}`).toContain("list");
-  expect(`${result.stdout}${result.stderr}`).toContain("details");
+  expect(result.stdout).toContain("Usage: neo sub");
+  expect(result.stdout).toContain("list");
+  expect(result.stdout).toContain("details");
 });
 
 test("neo sub details prints the body and the do-not-repeat line", () => {
