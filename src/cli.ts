@@ -110,7 +110,7 @@ async function runSub(name: string, opts: PromptOptions): Promise<void> {
 }
 
 async function printModels(): Promise<void> {
-  const gateway = createNeonGateway();
+  const gateway = await createNeonGateway();
   const text = await listModels(gateway);
   writeAnswer(text);
 }

@@ -78,6 +78,8 @@ The Neon gateway plugin reads `~/.config/neo/providers/neon.json`:
 
 `NEON_AI_GATEWAY_TOKEN` and `NEON_AI_GATEWAY_BASE_URL` override the file when both are set. Other gateway plugins pick their own filename under `~/.config/neo/providers/`.
 
+If the file is missing, a terminal `neo` run offers Neon AI Gateway, signs in with the Neon CLI (`neon auth` when needed), lets you pick an org and a project (or create one), mints a branch credential, and writes that file. Non-interactive runs still fail until the file exists.
+
 ## Design
 
 Capabilities are plugins. The core is the loop, the CLI, and the seams those plugins plug into.

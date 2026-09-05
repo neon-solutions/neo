@@ -79,7 +79,7 @@ export async function run(request: RunRequest): Promise<string> {
   const tools =
     discovered === undefined ? inspectTools : { ...inspectTools, ...createSkillTools(discovered) };
 
-  const gateway = request.gateway ?? createNeonGateway();
+  const gateway = request.gateway ?? (await createNeonGateway());
   const models = await gateway.listModels();
   const modelId = resolveModelId(request.model, models);
   const agent = new ToolLoopAgent({

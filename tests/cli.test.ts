@@ -145,6 +145,7 @@ test("models list without credentials fails before a network call", () => {
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("missing");
   expect(result.stderr).toContain("providers/neon.json");
+  expect(result.stderr).toContain("Run neo in a terminal");
 });
 
 test("resolveModelId accepts a catalog id and the fable alias", () => {

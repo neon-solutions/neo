@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createNeon } from "@neon/ai-sdk-provider";
+import type { Prompter } from "../lib/ask";
+import type { NeonExec } from "../lib/neon-cli";
 import { NeoError } from "../lib/errors";
 import type { Gateway, ModelInfo } from "../lib/gateway";
 
@@ -93,7 +95,7 @@ export function parseNeonProviderConfig(value: unknown, path: string): NeonProvi
   return { apiKey: apiKey.trim(), baseURL: baseURL.trim().replace(/\/+$/, "") };
 }
 
-export function loadNeonProviderConfig(): NeonProviderConfig {
+export function readNeonProviderConfig(): NeonProviderConfig | undefined {
   const envKey = process.env.NEON_AI_GATEWAY_TOKEN?.trim() ?? "";
   const envUrl = process.env.NEON_AI_GATEWAY_BASE_URL?.trim() ?? "";
   if (envKey.length > 0 || envUrl.length > 0) {
@@ -111,7 +113,7 @@ export function loadNeonProviderConfig(): NeonProviderConfig {
     text = readFileSync(path, "utf8");
   } catch (error) {
     if (isErrnoException(error) && error.code === "ENOENT") {
-      throw new NeoError(`neo: missing ${path}`);
+      return undefined;
     }
     throw error;
   }
@@ -125,8 +127,56 @@ export function loadNeonProviderConfig(): NeonProviderConfig {
   return parseNeonProviderConfig(body, path);
 }
 
-export function createNeonGateway(): Gateway {
-  const config = loadNeonProviderConfig();
+export function loadNeonProviderConfig(): NeonProviderConfig {
+  const config = readNeonProviderConfig();
+  if (config === undefined) {
+    throw new NeoError(`neo: missing ${neonProviderConfigPath()}`);
+  }
+  return config;
+}
+
+export function writeNeonProviderConfig(config: NeonProviderConfig): void {
+  const path = neonProviderConfigPath();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  chmodSync(path, 0o600);
+}
+
+export function missingProviderMessage(path: string): string {
+  return `neo: missing ${path}. Run neo in a terminal to set up the Neon AI Gateway.`;
+}
+
+export type EnsureNeonProviderConfigOptions = {
+  interactive?: boolean;
+  exec?: NeonExec;
+  prompter?: Prompter;
+};
+
+export async function ensureNeonProviderConfig(
+  options: EnsureNeonProviderConfigOptions = {},
+): Promise<NeonProviderConfig> {
+  const existing = readNeonProviderConfig();
+  if (existing !== undefined) {
+    return existing;
+  }
+  const interactive = options.interactive ?? process.stdin.isTTY === true;
+  if (!interactive) {
+    throw new NeoError(missingProviderMessage(neonProviderConfigPath()));
+  }
+  const { setupNeonGateway } = await import("./neon-setup");
+  const { execNeon } = await import("../lib/neon-cli");
+  const { createPrompter } = await import("../lib/ask");
+  return await setupNeonGateway({
+    exec: options.exec ?? execNeon,
+    prompter: options.prompter ?? createPrompter(),
+  });
+}
+
+export async function createNeonGateway(): Promise<Gateway> {
+  const config = await ensureNeonProviderConfig();
   const neon = createNeon({
     baseURL: config.baseURL,
     apiKey: config.apiKey,

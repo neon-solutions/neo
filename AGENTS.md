@@ -21,7 +21,7 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 ## Product constraints
 
 - Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: stepCountIs(20)`. Not Mastra. Not Pi.
-- Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `~/.config/neo/providers/neon.json` (`apiKey`, `baseURL`). `NEON_AI_GATEWAY_*` overrides when both are set.
+- Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `~/.config/neo/providers/neon.json` (`apiKey`, `baseURL`). `NEON_AI_GATEWAY_*` overrides when both are set. A TTY run with no credentials starts a Neon CLI wizard (the only provider): `neon auth` if needed, pick org, pick or create project, mint via `neon env pull -s ai-gateway`, write the file. Non-TTY still errors.
 - Tools: `read`, `grep`, `glob`, `ls`, `bash`, plus `write` and `edit` unless `--readonly`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` omits `write` and `edit`; `bash` can still mutate.
 - `--agents-md` loads every `AGENTS.md` from cwd up to the git root (farthest first). Fails if none exist. Off by default.
 - `--skills` discovers Agent Skills (Mastra layout and `skill` / `skill_search` / `skill_read` tools) and injects the catalog. Off by default. `--skills tdd,foo` loads only those names; a missing name fails.
@@ -54,6 +54,8 @@ src/lib/edit.ts                  unique non-overlapping replacements
 src/lib/paths.ts                 cwd/git-root path guards
 src/lib/ask.ts                   stderr prompts, stdin answers (create / delete)
 src/plugins/neon-ai-gateway.ts   First gateway plugin (~/.config/neo/providers/neon.json)
+src/plugins/neon-setup.ts        TTY wizard: Neon CLI auth, org/project, mint credentials
+src/lib/neon-cli.ts              neon subprocess + JSON/env parsers
 src/plugins/tools.ts             read, grep, glob, ls, bash, write, edit
 src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools)
 src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)
