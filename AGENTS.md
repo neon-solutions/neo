@@ -40,6 +40,8 @@ Work on `main`. Push `main`. No feature branch, no PR.
 4. `bun run fmt`.
 5. `git push origin main`. That push runs `.github/workflows/publish.yml`: typecheck, `bun run test:ci` (non-live), scriptc binaries for linux-x86_64 and darwin-arm64, then clobber the rolling `latest` GitHub Release. A red run is a finding to fix, not a reason to re-push past it.
 
+The installer URL `https://neo-andrelandgraf.vercel.app` proxies `setup.sh` from GitHub `main`, so a `setup.sh` change is live without a Vercel redeploy. Changing `install/` needs `vercel deploy --cwd install --prod --yes --project neo` (personal Vercel team `andrelandgraf`, project `neo`). Keep Deployment Protection / SSO off or `curl | bash` hits the Vercel login wall.
+
 ## Layout
 
 ```text
@@ -58,6 +60,7 @@ src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)
 src/plugins/subs-author.ts       neo sub create / update / delete
 tests/                           Vitest, real CLI process, no mocks
 setup.sh                         curl | bash installer (rolling `latest` release)
+install/                         Vercel proxy at https://neo-andrelandgraf.vercel.app
 .github/workflows/publish.yml    push to main → rolling `latest` release
 neon.ts                          preview.aiGateway
 ```

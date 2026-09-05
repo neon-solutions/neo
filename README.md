@@ -3,7 +3,7 @@
 A minimal lightweight open coding subagent.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/neon-solutions/neo/main/setup.sh | bash
+curl -fsSL https://neo-andrelandgraf.vercel.app | bash
 ```
 
 Supports macOS arm64 and Linux x86_64. Installs to `~/.local/bin`. Re-run to upgrade. `rg` must be on PATH.

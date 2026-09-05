@@ -20,3 +20,4 @@ pnpm-lock.yaml
 .env.local
 .neon
 .config/
+.vercel
