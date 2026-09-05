@@ -57,6 +57,7 @@ src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools
 src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)
 src/plugins/subs-author.ts       neo sub create / update / delete
 tests/                           Vitest, real CLI process, no mocks
+setup.sh                         curl | bash installer (rolling `latest` release)
 .github/workflows/publish.yml    push to main → rolling `latest` release
 neon.ts                          preview.aiGateway
 ```
