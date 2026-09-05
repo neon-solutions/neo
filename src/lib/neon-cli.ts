@@ -151,15 +151,12 @@ export function neonFailure(args: readonly string[], result: NeonExecResult): Ne
   return new NeoError(`neo: neon ${args.join(" ")} failed\n${detail}`);
 }
 
-export function execNeon(
-  args: readonly string[],
-  options?: { inheritStdio?: boolean },
-): NeonExecResult {
-  const inherit = options?.inheritStdio === true;
-  const result = spawnSync("neon", [...args], {
-    encoding: "utf8",
-    stdio: inherit ? "inherit" : ["ignore", "pipe", "pipe"],
-  });
+function fromNeonSpawn(result: {
+  error: Error | undefined;
+  status: number | null;
+  stdout: string | null;
+  stderr: string | null;
+}): NeonExecResult {
   if (result.error !== undefined) {
     if (errorCode(result.error) === "ENOENT") {
       throw new NeoError("neo: neon CLI not found. Install it with: npm install -g neon");
@@ -171,6 +168,35 @@ export function execNeon(
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
+}
+
+export function execNeon(
+  args: readonly string[],
+  options?: { inheritStdio?: boolean },
+): NeonExecResult {
+  const argv = [...args];
+  if (options?.inheritStdio === true) {
+    const result = spawnSync("neon", argv, {
+      encoding: "utf8",
+      stdio: "inherit",
+    });
+    return fromNeonSpawn({
+      error: result.error,
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    });
+  }
+  const result = spawnSync("neon", argv, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return fromNeonSpawn({
+    error: result.error,
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  });
 }
 
 export function neonJson(exec: NeonExec, args: readonly string[]): unknown {

@@ -56,6 +56,7 @@ src/lib/ask.ts                   stderr prompts, stdin answers (create / delete)
 src/plugins/neon-ai-gateway.ts   First gateway plugin (~/.config/neo/providers/neon.json)
 src/plugins/neon-setup.ts        TTY wizard: Neon CLI auth, org/project, mint credentials
 src/lib/neon-cli.ts              neon subprocess + JSON/env parsers
+src/lib/neon-provider-config.ts  neon.json + NEON_AI_GATEWAY_* read/write
 src/plugins/tools.ts             read, grep, glob, ls, bash, write, edit
 src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools)
 src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)

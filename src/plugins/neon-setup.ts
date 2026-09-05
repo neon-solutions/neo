@@ -22,7 +22,7 @@ import {
   parseNeonProviderConfig,
   writeNeonProviderConfig,
   type NeonProviderConfig,
-} from "./neon-ai-gateway";
+} from "../lib/neon-provider-config";
 
 export const DEFAULT_NEON_PROJECT_NAME = "neo";
 export const DEFAULT_NEON_REGION = "aws-us-east-2";
