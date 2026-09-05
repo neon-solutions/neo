@@ -73,6 +73,25 @@ export function parseYamlMap(lines: string[], options?: ParseYamlMapOptions): Ma
       throw yamlError(options?.source, `duplicate key "${key}"`);
     }
     const indicator = (raw ?? "").trim();
+    if (indicator.length === 0) {
+      const items: string[] = [];
+      while (i < lines.length) {
+        const next = lines[i];
+        if (next === undefined) {
+          break;
+        }
+        const listMatch = /^[ \t]+-[ \t]+(.*)$/.exec(next);
+        if (listMatch === null) {
+          break;
+        }
+        i += 1;
+        items.push(unquoteYaml(stripYamlComment(listMatch[1] ?? "").trim()));
+      }
+      if (items.length > 0) {
+        fields.set(key, items.join(", "));
+        continue;
+      }
+    }
     if (
       indicator === ">" ||
       indicator === ">-" ||

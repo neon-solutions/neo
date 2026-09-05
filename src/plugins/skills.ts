@@ -5,6 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { tool } from "ai";
 import { z } from "zod";
 import { splitFrontmatter } from "../lib/frontmatter";
+import { NeoError } from "../lib/errors";
 import { clip, errorCode, resolveUnderRoot, walkToGitRoot } from "../lib/paths";
 
 const PROJECT_SKILL_SEGMENTS = [
@@ -47,6 +48,9 @@ export type SkillSearchHit = {
   score: number;
 };
 
+// names is string[]: a rest tuple here makes scriptc treat RunRequest as any.
+export type SkillsFilter = { kind: "off" } | { kind: "all" } | { kind: "only"; names: string[] };
+
 type SkillLookup = { skill: SkillRecord } | { error: string };
 
 export function parseSkillMd(text: string): ParsedSkillMd | undefined {
@@ -76,6 +80,169 @@ export function parseSkillMd(text: string): ParsedSkillMd | undefined {
 
 export function isSkillName(name: string): boolean {
   return name.length >= 1 && name.length <= MAX_NAME_LENGTH && SKILL_NAME_RE.test(name);
+}
+
+export function skillsEqual(left: SkillsFilter, right: SkillsFilter): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind !== "only" || right.kind !== "only") {
+    return true;
+  }
+  if (left.names.length !== right.names.length) {
+    return false;
+  }
+  return left.names.every((name, index) => name === right.names[index]);
+}
+
+export function parseSkillsFilter(raw: string | undefined, source?: string): SkillsFilter {
+  if (raw === undefined) {
+    return { kind: "off" };
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed === "false" || trimmed === "none" || trimmed === "off") {
+    return { kind: "off" };
+  }
+  if (trimmed === "true" || trimmed === "all") {
+    return { kind: "all" };
+  }
+  let inner = trimmed;
+  if (inner.startsWith("[") && inner.endsWith("]")) {
+    inner = inner.slice(1, -1).trim();
+    if (inner.length === 0) {
+      return { kind: "off" };
+    }
+  }
+  const parts = inner
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return skillsOnly(uniqueSkillNames(parts, source));
+}
+
+export function skillsOnly(names: readonly string[]): SkillsFilter {
+  if (names.length === 0) {
+    return { kind: "off" };
+  }
+  const only: string[] = [];
+  for (const name of names) {
+    only.push(name);
+  }
+  return { kind: "only", names: only };
+}
+
+export function skillsFilterFromCli(value: boolean | string | undefined): SkillsFilter {
+  if (value === undefined || value === false) {
+    return { kind: "off" };
+  }
+  if (value === true) {
+    return { kind: "all" };
+  }
+  return parseSkillsFilter(value);
+}
+
+export function uniqueSkillNames(parts: string[], source?: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    if (!isSkillName(part)) {
+      throw skillsError(source, `invalid skill name "${part}"`);
+    }
+    if (seen.has(part)) {
+      continue;
+    }
+    seen.add(part);
+    names.push(part);
+  }
+  return names;
+}
+
+export function filterSkills(skills: SkillRecord[], names: readonly string[]): SkillRecord[] {
+  const found: SkillRecord[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    const matches = skills.filter((skill) => skill.name === name);
+    if (matches.length === 0) {
+      missing.push(name);
+      continue;
+    }
+    for (const match of matches) {
+      found.push(match);
+    }
+  }
+  if (missing.length > 0) {
+    throw new NeoError(
+      `neo: skill not found: ${missing.join(", ")}. ${availableSkillsSuffix(skills)}`,
+    );
+  }
+  return found;
+}
+
+export function formatSkillsYaml(filter: SkillsFilter): string[] {
+  if (filter.kind === "off") {
+    return [];
+  }
+  if (filter.kind === "all") {
+    return ["skills: true"];
+  }
+  const lines = ["skills:"];
+  for (const name of filter.names) {
+    lines.push(`  - ${name}`);
+  }
+  return lines;
+}
+
+export function formatSkillsMeta(filter: SkillsFilter): string | undefined {
+  if (filter.kind === "off") {
+    return undefined;
+  }
+  if (filter.kind === "all") {
+    return "skills";
+  }
+  return `skills ${filter.names.join(", ")}`;
+}
+
+export function uniqueSkillRecordNames(skills: SkillRecord[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const skill of skills) {
+    if (seen.has(skill.name)) {
+      continue;
+    }
+    seen.add(skill.name);
+    names.push(skill.name);
+  }
+  names.sort();
+  return names;
+}
+
+export async function discoverSkillsForFilter(args: {
+  cwd: string;
+  home?: string;
+  filter: SkillsFilter;
+}): Promise<SkillRecord[] | undefined> {
+  if (args.filter.kind === "off") {
+    return undefined;
+  }
+  const all = await discoverSkills({ cwd: args.cwd, home: args.home });
+  if (args.filter.kind === "all") {
+    return all;
+  }
+  return filterSkills(all, args.filter.names);
+}
+
+function skillsError(source: string | undefined, detail: string): NeoError {
+  if (source === undefined) {
+    return new NeoError(`neo: ${detail}`);
+  }
+  return new NeoError(`neo: ${source}: ${detail}`);
+}
+
+function availableSkillsSuffix(skills: SkillRecord[]): string {
+  if (skills.length === 0) {
+    return "Available: none";
+  }
+  return `Available: ${uniqueSkillRecordNames(skills).join(", ")}`;
 }
 
 export function formatSkillActivation(skill: SkillRecord): string {

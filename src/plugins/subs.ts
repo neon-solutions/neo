@@ -4,7 +4,14 @@ import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { NeoError } from "../lib/errors";
 import { parseYamlMap, splitFrontmatter } from "../lib/frontmatter";
 import { errorCode, walkToGitRoot } from "../lib/paths";
-import { isSkillName } from "./skills";
+import {
+  formatSkillsMeta,
+  formatSkillsYaml,
+  isSkillName,
+  parseSkillsFilter,
+  skillsEqual,
+} from "./skills";
+import type { SkillsFilter } from "./skills";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 const LIST_WRAP = 78;
@@ -18,7 +25,7 @@ export type ParsedSub = {
   cwd?: string;
   readonly: boolean;
   agentsMd: boolean;
-  skills: boolean;
+  skills: SkillsFilter;
   systemPrompt: string;
 };
 
@@ -38,7 +45,7 @@ export type ComposeSubFields = {
   cwd?: string;
   readonly: boolean;
   agentsMd: boolean;
-  skills: boolean;
+  skills: SkillsFilter;
 };
 
 export type SubTargetDirArgs = {
@@ -101,7 +108,7 @@ export function parseSubMd(text: string, filePath: string): ParsedSub {
     cwd: cwd === undefined ? undefined : cwd.trim(),
     readonly: parseBool(split.fields.get("readonly"), "readonly", filePath, false),
     agentsMd: parseBool(split.fields.get("agents-md"), "agents-md", filePath, false),
-    skills: parseBool(split.fields.get("skills"), "skills", filePath, false),
+    skills: parseSkillsFilter(split.fields.get("skills"), filePath),
     systemPrompt,
   };
 }
@@ -150,8 +157,8 @@ export function composeSubMd(fields: ComposeSubFields, body: string): string {
   if (fields.agentsMd) {
     frontmatter.push("agents-md: true");
   }
-  if (fields.skills) {
-    frontmatter.push("skills: true");
+  for (const line of formatSkillsYaml(fields.skills)) {
+    frontmatter.push(line);
   }
   frontmatter.push("---");
   const text = `${frontmatter.join("\n")}\n${systemPrompt}\n`;
@@ -163,7 +170,7 @@ export function composeSubMd(fields: ComposeSubFields, body: string): string {
     parsed.cwd !== cwd ||
     parsed.readonly !== fields.readonly ||
     parsed.agentsMd !== fields.agentsMd ||
-    parsed.skills !== fields.skills ||
+    !skillsEqual(parsed.skills, fields.skills) ||
     parsed.systemPrompt !== systemPrompt
   ) {
     throw new NeoError("neo: composed template did not round-trip");
@@ -277,8 +284,8 @@ export function formatSubDetails(sub: SubRecord, home?: string): string {
   if (sub.agentsMd) {
     frontmatter.push("agents-md: true");
   }
-  if (sub.skills) {
-    frontmatter.push("skills: true");
+  for (const line of formatSkillsYaml(sub.skills)) {
+    frontmatter.push(line);
   }
   frontmatter.push("---");
   return [
@@ -407,8 +414,9 @@ function formatMeta(sub: SubRecord, home: string): string {
   if (sub.agentsMd) {
     parts.push("agents-md");
   }
-  if (sub.skills) {
-    parts.push("skills");
+  const skillsMeta = formatSkillsMeta(sub.skills);
+  if (skillsMeta !== undefined) {
+    parts.push(skillsMeta);
   }
   if (sub.cwd !== undefined) {
     parts.push(`cwd ${displayHome(sub.cwd, home)}`);

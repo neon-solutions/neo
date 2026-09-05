@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
 import { createNeonGateway } from "./plugins/neon-ai-gateway";
+import { skillsFilterFromCli } from "./plugins/skills";
 import {
   createSub,
   deleteSub,
@@ -32,7 +33,7 @@ type RunOptions = PromptOptions & {
   model?: string;
   readonly: boolean;
   agentsMd: boolean;
-  skills: boolean;
+  skills?: boolean | string;
 };
 
 const ROOT_LAUNCH_FLAGS = ["model", "readonly", "agentsMd", "skills"] as const;
@@ -61,23 +62,29 @@ function assertSealedRootFlags(program: Command): void {
 }
 
 async function runAgent(opts: RunOptions): Promise<void> {
-  if (opts.prompt !== undefined && opts.promptFile !== undefined) {
+  const optPrompt = opts.prompt;
+  const optPromptFile = opts.promptFile;
+  const optModel = opts.model;
+  const optReadonly = opts.readonly;
+  const optAgentsMd = opts.agentsMd;
+  const optSkills = opts.skills;
+  if (optPrompt !== undefined && optPromptFile !== undefined) {
     throw new NeoError("neo: use --prompt or --prompt-file, not both");
   }
   const fromFile =
-    opts.promptFile === undefined ? undefined : readFileSync(resolve(opts.promptFile), "utf8");
-  const prompt = (opts.prompt ?? fromFile ?? "").trim();
-  if (opts.model === undefined || prompt.length === 0) {
+    optPromptFile === undefined ? undefined : readFileSync(resolve(optPromptFile), "utf8");
+  const prompt = (optPrompt ?? fromFile ?? "").trim();
+  if (optModel === undefined || prompt.length === 0) {
     throw new NeoError("neo requires --model and --prompt (or --prompt-file)");
   }
 
   const text = await run({
-    model: opts.model,
+    model: optModel,
     cwd: process.cwd(),
     prompt,
-    readonly: opts.readonly,
-    agentsMd: opts.agentsMd,
-    skills: opts.skills,
+    readonly: optReadonly,
+    agentsMd: optAgentsMd,
+    skills: skillsFilterFromCli(optSkills),
   });
   writeAnswer(text);
 }
@@ -143,9 +150,8 @@ async function main(argv: string[]): Promise<void> {
       false,
     )
     .option(
-      "--skills",
-      "discover Agent Skills and attach skill, skill_search, and skill_read",
-      false,
+      "--skills [names]",
+      "discover Agent Skills (all, or a comma-separated subset; off by default)",
     )
     .action(async (opts: RunOptions) => {
       await runAgent(opts);
@@ -186,7 +192,7 @@ async function main(argv: string[]): Promise<void> {
     .option("--cwd <path>", "working directory for the sub (absolute or ~/)")
     .option("--readonly", "omit write and edit tools", false)
     .option("--agents-md", "load AGENTS.md into the system prompt", false)
-    .option("--skills", "discover Agent Skills", false)
+    .option("--skills [names]", "discover Agent Skills (all, or a comma-separated subset)")
     .option("--global", "write to ~/.agents/subs/", false)
     .option("--body <text>", "system prompt")
     .option("--body-file <path>", "read the system prompt from a file")
@@ -205,7 +211,7 @@ async function main(argv: string[]): Promise<void> {
     .option("--clear-cwd", "remove cwd from the template", false)
     .option("--readonly <true|false>", "set readonly")
     .option("--agents-md <true|false>", "set agents-md")
-    .option("--skills <true|false>", "set skills")
+    .option("--skills <value>", "set skills (true, false, or comma-separated names)")
     .option("--body <text>", "system prompt")
     .option("--body-file <path>", "read the system prompt from a file")
     .action(async (name: string, opts: UpdateSubOptions, command: Command) => {

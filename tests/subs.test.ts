@@ -68,7 +68,7 @@ test("parseSubMd reads all keys and keeps the body", () => {
     cwd: "~/workspaces",
     readonly: true,
     agentsMd: true,
-    skills: true,
+    skills: { kind: "all" },
     systemPrompt: "You are running a critical engineering review.\nBODY-NONCE-kestrel",
   });
 });
@@ -99,7 +99,7 @@ Do the thing.
   );
   expect(parsed.readonly).toBe(false);
   expect(parsed.agentsMd).toBe(false);
-  expect(parsed.skills).toBe(false);
+  expect(parsed.skills).toEqual({ kind: "off" });
   expect(parsed.cwd).toBeUndefined();
   expect(parsed.model).toBe("fable");
 });
@@ -247,7 +247,7 @@ test("formatSubsList prints meta and description, not the body", () => {
         cwd: "/Users/me/workspaces",
         readonly: true,
         agentsMd: true,
-        skills: true,
+        skills: { kind: "all" },
         systemPrompt: "BODY-NONCE-kestrel",
         path: "/tmp/pr-review.md",
         source: "project",
@@ -260,9 +260,30 @@ test("formatSubsList prints meta and description, not the body", () => {
   expect(listed).toContain("readonly");
   expect(listed).toContain("agents-md");
   expect(listed).toContain("skills");
+  expect(listed).not.toContain("skills tdd");
   expect(listed).toContain("cwd ~/workspaces");
   expect(listed).toContain("Critical engineering review of an open PR.");
   expect(listed).not.toContain("BODY-NONCE-kestrel");
+});
+
+test("formatSubsList names an allowlist", () => {
+  const listed = formatSubsList(
+    [
+      {
+        name: "filtered",
+        description: "Filtered review.",
+        model: "fable",
+        readonly: false,
+        agentsMd: false,
+        skills: { kind: "only", names: ["tdd", "foo"] },
+        systemPrompt: "Body.",
+        path: "/tmp/filtered.md",
+        source: "project",
+      },
+    ],
+    "/Users/me",
+  );
+  expect(listed).toContain("skills tdd, foo");
 });
 
 test("formatSubDetails prints the full template and the do-not-repeat line", () => {
@@ -274,7 +295,7 @@ test("formatSubDetails prints the full template and the do-not-repeat line", () 
       cwd: "/Users/me/workspaces",
       readonly: true,
       agentsMd: true,
-      skills: true,
+      skills: { kind: "all" },
       systemPrompt: "BODY-NONCE-kestrel",
       path: "/tmp/pr-review.md",
       source: "project",
@@ -766,4 +787,104 @@ test("neo sub details requires a name", () => {
   const result = neo(["sub", "details"]);
   expect(result.status).not.toBe(0);
   expect(`${result.stdout}${result.stderr}`).toMatch(/name|required|missing/i);
+});
+
+test("parseSubMd reads a skills allowlist", () => {
+  const parsed = parseSubMd(
+    `---
+description: Filtered review.
+model: fable
+skills:
+  - alpha-skill
+  - beta-skill
+---
+Body.
+`,
+    "/tmp/filtered.md",
+  );
+  expect(parsed.skills).toEqual({ kind: "only", names: ["alpha-skill", "beta-skill"] });
+});
+
+test("parseSubMd reads a flow skills list and rejects a bad name", () => {
+  const parsed = parseSubMd(
+    `---
+description: Filtered review.
+model: fable
+skills: [alpha-skill, beta-skill]
+---
+Body.
+`,
+    "/tmp/flow.md",
+  );
+  expect(parsed.skills).toEqual({ kind: "only", names: ["alpha-skill", "beta-skill"] });
+
+  expect(() =>
+    parseSubMd(
+      `---
+description: Bad skills.
+model: fable
+skills:
+  - Not_Kebab
+---
+Body.
+`,
+      "/tmp/bad-skills.md",
+    ),
+  ).toThrow(/invalid skill name/);
+});
+
+test("a skills allowlist missing from cwd fails before credentials", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  writeSub(
+    cwd,
+    "filtered",
+    `---
+description: Filtered review.
+model: fable
+skills:
+  - missing-skill
+---
+Body.
+`,
+  );
+  const env = isolatedEnv(home);
+  const result = neo(["sub", "filtered", "--prompt", "x"], { cwd, env });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("skill not found");
+  expect(result.stderr).toContain("missing-skill");
+  expect(result.stderr).not.toContain("providers/neon.json");
+});
+
+test("a skills allowlist present in cwd reaches the credential check", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  mkdirSync(join(cwd, ".agents", "skills", "alpha-skill"), { recursive: true });
+  writeFileSync(
+    join(cwd, ".agents", "skills", "alpha-skill", "SKILL.md"),
+    `---
+name: alpha-skill
+description: Alpha.
+---
+A.
+`,
+  );
+  writeSub(
+    cwd,
+    "filtered",
+    `---
+description: Filtered review.
+model: fable
+skills:
+  - alpha-skill
+---
+Body.
+`,
+  );
+  const result = neo(["sub", "filtered", "--prompt", "x"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("providers/neon.json");
+  expect(result.stderr).not.toContain("skill not found");
 });

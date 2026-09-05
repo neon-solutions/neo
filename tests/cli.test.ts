@@ -74,6 +74,57 @@ test("--agents-md with a file reaches the credential check", () => {
   expect(result.stderr).toContain("providers/neon.json");
 });
 
+test("--skills does not consume the following --model flag", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-"));
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
+  const result = neo(["--skills", "--model", "fable", "--prompt", "x"], { cwd: dir, env });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("providers/neon.json");
+  expect(result.stderr).not.toContain("requires --model");
+  expect(result.stderr).not.toContain("invalid skill name");
+});
+
+test("--skills names missing from cwd fail before credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-"));
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
+  const result = neo(["--skills", "missing-skill", "--model", "fable", "--prompt", "x"], {
+    cwd: dir,
+    env,
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("skill not found");
+  expect(result.stderr).toContain("missing-skill");
+  expect(result.stderr).not.toContain("providers/neon.json");
+});
+
+test("--skills names present in cwd reach the credential check", () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-"));
+  mkdirSync(join(dir, ".agents", "skills", "alpha-skill"), { recursive: true });
+  writeFileSync(
+    join(dir, ".agents", "skills", "alpha-skill", "SKILL.md"),
+    `---
+name: alpha-skill
+description: Alpha.
+---
+A.
+`,
+  );
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: dir };
+  delete env.NEON_AI_GATEWAY_TOKEN;
+  delete env.NEON_AI_GATEWAY_BASE_URL;
+  const result = neo(["--skills", "alpha-skill", "--model", "fable", "--prompt", "x"], {
+    cwd: dir,
+    env,
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("providers/neon.json");
+  expect(result.stderr).not.toContain("skill not found");
+});
+
 test("rejects --prompt and --prompt-file together", () => {
   const dir = mkdtempSync(join(tmpdir(), "neo-"));
   writeFileSync(join(dir, "prompt.txt"), "hello");

@@ -16,7 +16,16 @@ import {
   subTargetDir,
   type ComposeSubFields,
 } from "./subs";
-import { isSkillName } from "./skills";
+import {
+  discoverSkills,
+  filterSkills,
+  isSkillName,
+  parseSkillsFilter,
+  skillsFilterFromCli,
+  skillsOnly,
+  uniqueSkillRecordNames,
+} from "./skills";
+import type { SkillsFilter } from "./skills";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 
@@ -26,7 +35,7 @@ export type CreateSubOptions = {
   cwd?: string;
   readonly: boolean;
   agentsMd: boolean;
-  skills: boolean;
+  skills?: boolean | string;
   global: boolean;
   body?: string;
   bodyFile?: string;
@@ -113,12 +122,15 @@ export async function createSub(
     prompter,
     prompt: "agents-md? [y/N] ",
   });
-  const skills = await resolveBool({
+  const discoverCwd =
+    cwdValue === undefined ? cwd : await resolveExistingCwd(cwdValue, home, "cwd");
+  const skills = await resolveSkills({
     flagged: cli("skills"),
     value: optSkills,
     wizard,
     prompter,
-    prompt: "skills? [y/N] ",
+    discoverCwd,
+    home,
   });
   const body = await resolveBody({
     body: cli("body") ? optBody : undefined,
@@ -226,8 +238,13 @@ export async function updateSub(
     ? parseTrueFalse(mustTrimmed(optAgentsMd, "agents-md"), "agents-md")
     : parsed.agentsMd;
   const skills = cli("skills")
-    ? parseTrueFalse(mustTrimmed(optSkills, "skills"), "skills")
+    ? parseSkillsFilter(mustTrimmed(optSkills, "skills"))
     : parsed.skills;
+  if (cli("skills") && skills.kind === "only") {
+    const discoverFrom =
+      nextCwd === undefined ? (sub.cwd ?? cwd) : await resolveExistingCwd(nextCwd, home, sub.path);
+    filterSkills(await discoverSkills({ cwd: discoverFrom, home }), skills.names);
+  }
   const body = cli("body")
     ? parseBody(mustTrimmed(optBody, "body"))
     : cli("bodyFile")
@@ -420,6 +437,130 @@ async function resolveBool(args: {
     }
     process.stderr.write("neo: enter y or n\n");
   }
+}
+
+async function resolveSkills(args: {
+  flagged: boolean;
+  value: boolean | string | undefined;
+  wizard: boolean;
+  prompter: Prompter | undefined;
+  discoverCwd: string;
+  home: string;
+}): Promise<SkillsFilter> {
+  if (args.flagged) {
+    const filter = skillsFilterFromCli(args.value);
+    if (filter.kind === "only") {
+      filterSkills(await discoverSkills({ cwd: args.discoverCwd, home: args.home }), filter.names);
+    }
+    return filter;
+  }
+  if (!args.wizard || args.prompter === undefined) {
+    return { kind: "off" };
+  }
+  return await pickSkills(args.prompter, args.discoverCwd, args.home);
+}
+
+async function pickSkills(
+  prompter: Prompter,
+  discoverCwd: string,
+  home: string,
+): Promise<SkillsFilter> {
+  const discovered = await discoverSkills({ cwd: discoverCwd, home });
+  const names = uniqueSkillRecordNames(discovered);
+  const selected = new Set(names);
+
+  const accept = (): SkillsFilter => {
+    if (selected.size === 0 || names.length === 0) {
+      return { kind: "off" };
+    }
+    if (selected.size === names.length) {
+      return { kind: "all" };
+    }
+    const chosen = names.filter((name) => selected.has(name));
+    return skillsOnly(chosen);
+  };
+
+  for (;;) {
+    writeSkillsMenu(names, selected);
+    const line = await prompter.ask("> ");
+    if (line === undefined) {
+      return accept();
+    }
+    const value = line.trim().toLowerCase();
+    if (value.length === 0) {
+      return accept();
+    }
+    if (value === "n" || value === "no" || value === "none" || value === "off") {
+      return { kind: "off" };
+    }
+    if (value === "y" || value === "yes" || value === "all") {
+      return { kind: "all" };
+    }
+    if (names.length === 0) {
+      process.stderr.write("neo: enter none, all, or press Enter\n");
+      continue;
+    }
+    const toggles = parseSkillToggles(line, names.length);
+    if (toggles === undefined) {
+      process.stderr.write("neo: enter none, all, numbers to toggle, or press Enter\n");
+      continue;
+    }
+    for (const index of toggles) {
+      const name = names[index];
+      if (name === undefined) {
+        continue;
+      }
+      if (selected.has(name)) {
+        selected.delete(name);
+      } else {
+        selected.add(name);
+      }
+    }
+  }
+}
+
+function writeSkillsMenu(names: string[], selected: Set<string>): void {
+  if (names.length === 0) {
+    process.stderr.write("Skills (none in cwd). Enter or none to skip, all to enable:\n");
+    return;
+  }
+  const label =
+    selected.size === 0
+      ? "none selected"
+      : selected.size === names.length
+        ? "all selected"
+        : `${selected.size} selected`;
+  process.stderr.write(`Skills (${label}). Enter to accept, none, all, or numbers to toggle:\n`);
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i];
+    if (name === undefined) {
+      continue;
+    }
+    const mark = selected.has(name) ? "x" : " ";
+    process.stderr.write(`  [${mark}] ${i + 1}. ${name}\n`);
+  }
+}
+
+function parseSkillToggles(line: string, count: number): number[] | undefined {
+  const parts = line
+    .trim()
+    .split(/[\s,]+/)
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  const indexes: number[] = [];
+  for (const part of parts) {
+    if (!/^[1-9][0-9]*$/.test(part)) {
+      return undefined;
+    }
+    const n = Number(part);
+    if (n < 1 || n > count) {
+      return undefined;
+    }
+    indexes.push(n - 1);
+  }
+  return indexes;
 }
 
 async function resolveBody(args: {

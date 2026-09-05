@@ -23,7 +23,7 @@ neo --agents-md --skills --model fable --prompt "Implement the spec"
 
 `--agents-md` walks from the working directory up to the git root, loads every `AGENTS.md`, and concatenates farthest first so nearer files win. It fails if none are found.
 
-`--skills` discovers Agent Skills from project `.agents/skills`, `.claude/skills`, and `.mastracode/skills` (cwd to git root) plus the same folders under `$HOME`, then attaches `skill`, `skill_search`, and `skill_read`.
+`--skills` discovers Agent Skills from project `.agents/skills`, `.claude/skills`, and `.mastracode/skills` (cwd to git root) plus the same folders under `$HOME`, then attaches `skill`, `skill_search`, and `skill_read`. Pass comma-separated names to load a subset: `--skills tdd,good-code-comments`.
 
 ```bash
 neo models list
@@ -40,7 +40,7 @@ neo sub create eng-review \
   --description "Critical engineering review of an open PR." \
   --model sol \
   --cwd ~/workspaces \
-  --readonly --agents-md --skills \
+  --readonly --agents-md --skills tdd,good-code-comments \
   --body-file /tmp/system-prompt.md
 neo sub update eng-review --model fable
 neo sub delete eng-review --yes
@@ -48,7 +48,7 @@ neo sub delete eng-review --yes
 
 A **sub** is a named launch template: model, flags, optional cwd, and a system prompt, so the parent supplies only the task prompt. `neo sub list` prints names and descriptions, never the system prompt. `neo sub details <name>` prints the full template, including the body, and tells the parent not to repeat that body in `--prompt`. Launch flags (`--model`, `--readonly`, `--agents-md`, `--skills`) cannot be overridden; they live in the file.
 
-`neo sub create` writes that file. With no flags it prompts on stderr (name, project vs global, description, model, cwd, readonly / agents-md / skills, then the system prompt until Ctrl-D) and prints the path on stdout. Pass every required flag (`name`, `--description`, `--model`, `--body` or `--body-file`) and it does not prompt; `--global` writes to `~/.agents/subs/`, otherwise the project `.agents/subs/` (git root, or the invocation directory if there is no git). `neo sub update <name>` changes fields on the discovered file (project shadows global). `neo sub delete <name>` removes that file after `y/N`; `--yes` skips the confirm. `list`, `help`, `details`, `create`, `update`, and `delete` are reserved filenames.
+`neo sub create` writes that file. With no flags it prompts on stderr (name, project vs global, description, model, cwd, readonly / agents-md / skills, then the system prompt until Ctrl-D) and prints the path on stdout. The skills step lists skills in the sub's cwd (all selected). Enter keeps the current set (`skills: true` when all stay on), `none` turns them off, `all` turns them all on, and numbers toggle rows. Pass every required flag (`name`, `--description`, `--model`, `--body` or `--body-file`) and it does not prompt; `--skills` is all, `--skills tdd,foo` is an allowlist. `--global` writes to `~/.agents/subs/`, otherwise the project `.agents/subs/` (git root, or the invocation directory if there is no git). `neo sub update <name>` changes fields on the discovered file (project shadows global), including `--skills true|false|<names>`. `neo sub delete <name>` removes that file after `y/N`; `--yes` skips the confirm. `list`, `help`, `details`, `create`, `update`, and `delete` are reserved filenames.
 
 Discovery: `.agents/subs/<name>.md` from the invocation directory up to the git root, then `~/.agents/subs/<name>.md`. Project shadows global. `update` and `delete` act on the winner; a shadowed global is edited by removing the project file first, or by editing the global file directly. User-wide jobs belong under `~/.agents/subs/` so they resolve from a nested clone. A sub may pin `cwd` for the run (`--agents-md` and `--skills` walk that directory); there is still no `--cwd` flag on launch.
 
@@ -59,7 +59,9 @@ model: sol
 cwd: ~/workspaces
 readonly: true
 agents-md: true
-skills: true
+skills:
+  - tdd
+  - good-code-comments
 ---
 
 You are running a critical engineering review of one pull request.

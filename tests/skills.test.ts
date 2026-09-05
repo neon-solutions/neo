@@ -5,11 +5,14 @@ import { afterEach, expect, test } from "vitest";
 import { buildInstructions } from "../src/lib/run";
 import {
   discoverSkills,
+  filterSkills,
   formatSkillActivation,
   formatSkillsCatalog,
   lookupSkill,
   parseSkillMd,
+  parseSkillsFilter,
   searchSkills,
+  skillsFilterFromCli,
 } from "../src/plugins/skills";
 
 const dirs: string[] = [];
@@ -222,4 +225,48 @@ test("buildInstructions drops the skip line for each enabled plugin", () => {
   expect(agentsAt).toBeGreaterThan(-1);
   expect(subAt).toBeGreaterThan(agentsAt);
   expect(finalAt).toBeGreaterThan(subAt);
+});
+
+test("parseSkillsFilter and filterSkills select a subset", async () => {
+  expect(parseSkillsFilter(undefined)).toEqual({ kind: "off" });
+  expect(parseSkillsFilter("true")).toEqual({ kind: "all" });
+  expect(parseSkillsFilter("false")).toEqual({ kind: "off" });
+  expect(parseSkillsFilter("tdd, tdd, good-code-comments")).toEqual({
+    kind: "only",
+    names: ["tdd", "good-code-comments"],
+  });
+  expect(parseSkillsFilter("[tdd, foo-bar]")).toEqual({
+    kind: "only",
+    names: ["tdd", "foo-bar"],
+  });
+  expect(() => parseSkillsFilter("Not_Kebab")).toThrow(/invalid skill name/);
+  expect(skillsFilterFromCli(undefined)).toEqual({ kind: "off" });
+  expect(skillsFilterFromCli(true)).toEqual({ kind: "all" });
+  expect(skillsFilterFromCli("tdd,foo")).toEqual({ kind: "only", names: ["tdd", "foo"] });
+
+  const cwd = tmp();
+  mkdirSync(join(cwd, ".agents", "skills", "alpha-skill"), { recursive: true });
+  mkdirSync(join(cwd, ".agents", "skills", "beta-skill"), { recursive: true });
+  writeFileSync(
+    join(cwd, ".agents", "skills", "alpha-skill", "SKILL.md"),
+    `---
+name: alpha-skill
+description: Alpha.
+---
+A.
+`,
+  );
+  writeFileSync(
+    join(cwd, ".agents", "skills", "beta-skill", "SKILL.md"),
+    `---
+name: beta-skill
+description: Beta.
+---
+B.
+`,
+  );
+  const skills = await discoverSkills({ cwd, home: tmp() });
+  const filtered = filterSkills(skills, ["beta-skill"]);
+  expect(filtered.map((skill) => skill.name)).toEqual(["beta-skill"]);
+  expect(() => filterSkills(skills, ["missing-skill"])).toThrow(/skill not found/);
 });

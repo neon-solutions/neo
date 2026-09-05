@@ -55,6 +55,20 @@ function writeSub(dir: string, name: string, contents: string): string {
   return path;
 }
 
+function writeSkill(dir: string, name: string): void {
+  const folder = join(dir, ".agents", "skills", name);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(
+    join(folder, "SKILL.md"),
+    `---
+name: ${name}
+description: ${name} skill.
+---
+Instructions for ${name}.
+`,
+  );
+}
+
 function gitRepo(): { cwd: string; home: string; env: NodeJS.ProcessEnv } {
   const cwd = tmp();
   const home = tmp();
@@ -77,7 +91,7 @@ test("composeSubMd round-trips a minimal sub", () => {
       model: "fable",
       readonly: false,
       agentsMd: false,
-      skills: false,
+      skills: { kind: "off" },
     },
     "Do the thing.",
   );
@@ -94,7 +108,7 @@ Do the thing.
     cwd: undefined,
     readonly: false,
     agentsMd: false,
-    skills: false,
+    skills: { kind: "off" },
     systemPrompt: "Do the thing.",
   });
 });
@@ -107,7 +121,7 @@ test("composeSubMd round-trips all fields and omits false booleans", () => {
       cwd: "~/workspaces",
       readonly: true,
       agentsMd: true,
-      skills: true,
+      skills: { kind: "all" },
     },
     "You are running a critical engineering review.",
   );
@@ -128,7 +142,7 @@ You are running a critical engineering review.
     cwd: "~/workspaces",
     readonly: true,
     agentsMd: true,
-    skills: true,
+    skills: { kind: "all" },
     systemPrompt: "You are running a critical engineering review.",
   });
 });
@@ -141,7 +155,7 @@ test("composeSubMd quotes values the bare form cannot round-trip", () => {
       model: "fable",
       readonly: false,
       agentsMd: false,
-      skills: false,
+      skills: { kind: "off" },
     },
     "Body.",
   );
@@ -158,7 +172,7 @@ test("composeSubMd round-trips a description with both quotes and a hash comment
       model: "fable",
       readonly: false,
       agentsMd: false,
-      skills: false,
+      skills: { kind: "off" },
     },
     "Body.",
   );
@@ -173,7 +187,7 @@ test("composeSubMd round-trips unicode and a colon in description", () => {
       model: "fable",
       readonly: false,
       agentsMd: false,
-      skills: false,
+      skills: { kind: "off" },
     },
     "Body.",
   );
@@ -188,7 +202,7 @@ test("composeSubMd round-trips a multiline description via block scalar", () => 
       model: "fable",
       readonly: false,
       agentsMd: false,
-      skills: false,
+      skills: { kind: "off" },
     },
     "Body.",
   );
@@ -203,7 +217,7 @@ test("composeSubMd throws when the body is empty", () => {
         model: "fable",
         readonly: false,
         agentsMd: false,
-        skills: false,
+        skills: { kind: "off" },
       },
       "  \n",
     ),
@@ -215,7 +229,7 @@ test("composeSubMd throws when the body is empty", () => {
         model: "fable",
         readonly: false,
         agentsMd: false,
-        skills: false,
+        skills: { kind: "off" },
       },
       "  \n",
     ),
@@ -282,7 +296,7 @@ test("neo sub create with full flags writes a project template and does not prom
     cwd: "~/workspaces",
     readonly: true,
     agentsMd: true,
-    skills: true,
+    skills: { kind: "all" },
     systemPrompt: "You are running a critical engineering review.",
   });
 
@@ -534,7 +548,7 @@ test("neo sub create wizard reads stdin and writes prompts to stderr", () => {
   expect(result.stderr).toContain("cwd (absolute or ~/, empty to skip): ");
   expect(result.stderr).toContain("readonly? [y/N] ");
   expect(result.stderr).toContain("agents-md? [y/N] ");
-  expect(result.stderr).toContain("skills? [y/N] ");
+  expect(result.stderr).toContain("Skills (none in cwd).");
   expect(result.stderr).toContain("System prompt (end with Ctrl-D):");
   const parsed = parseSubMd(readFileSync(dest, "utf8"), dest);
   expect(parsed.name).toBe("eng-review");
@@ -543,7 +557,7 @@ test("neo sub create wizard reads stdin and writes prompts to stderr", () => {
   expect(parsed.cwd).toBe("~/workspaces");
   expect(parsed.readonly).toBe(true);
   expect(parsed.agentsMd).toBe(true);
-  expect(parsed.skills).toBe(false);
+  expect(parsed.skills).toEqual({ kind: "off" });
   expect(parsed.systemPrompt).toBe("Body line one.\nBody line two.");
 });
 
@@ -641,7 +655,7 @@ You are running a critical engineering review.
     cwd: "~/workspaces",
     readonly: true,
     agentsMd: true,
-    skills: true,
+    skills: { kind: "all" },
     systemPrompt: "You are running a critical engineering review.",
   });
 });
@@ -866,4 +880,182 @@ Do the thing.
   const reserved = neo(["sub", "delete", "details", "--yes"], { cwd, env });
   expect(reserved.status).toBe(1);
   expect(reserved.stderr).toContain("reserved");
+});
+
+test("composeSubMd round-trips a skills allowlist", () => {
+  const text = composeSubMd(
+    {
+      description: "Filtered review.",
+      model: "fable",
+      readonly: false,
+      agentsMd: false,
+      skills: { kind: "only", names: ["alpha-skill", "beta-skill"] },
+    },
+    "Body.",
+  );
+  expect(text).toBe(`---
+description: Filtered review.
+model: fable
+skills:
+  - alpha-skill
+  - beta-skill
+---
+Body.
+`);
+  expect(parseSubMd(text, "/tmp/filtered.md").skills).toEqual({
+    kind: "only",
+    names: ["alpha-skill", "beta-skill"],
+  });
+});
+
+test("neo sub create --skills names writes an allowlist", () => {
+  const { cwd, env } = gitRepo();
+  writeSkill(cwd, "alpha-skill");
+  writeSkill(cwd, "beta-skill");
+  const result = neo(
+    [
+      "sub",
+      "create",
+      "filtered",
+      "--description",
+      "Filtered review.",
+      "--model",
+      "fable",
+      "--skills",
+      "alpha-skill,beta-skill",
+      "--body",
+      "Body.",
+    ],
+    { cwd, env },
+  );
+  expect(result.status).toBe(0);
+  const dest = join(cwd, ".agents", "subs", "filtered.md");
+  expect(parseSubMd(readFileSync(dest, "utf8"), dest).skills).toEqual({
+    kind: "only",
+    names: ["alpha-skill", "beta-skill"],
+  });
+  const listed = neo(["sub", "list"], { cwd, env });
+  expect(listed.stdout).toContain("skills alpha-skill, beta-skill");
+});
+
+test("neo sub create --skills rejects a name that is not in cwd", () => {
+  const { cwd, env } = gitRepo();
+  writeSkill(cwd, "alpha-skill");
+  const result = neo(
+    [
+      "sub",
+      "create",
+      "filtered",
+      "--description",
+      "Filtered review.",
+      "--model",
+      "fable",
+      "--skills",
+      "missing-skill",
+      "--body",
+      "Body.",
+    ],
+    { cwd, env },
+  );
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("skill not found");
+  expect(result.stderr).toContain("missing-skill");
+  expect(existsSync(join(cwd, ".agents", "subs", "filtered.md"))).toBe(false);
+});
+
+test("neo sub create wizard toggles a subset", () => {
+  const { cwd, env } = gitRepo();
+  writeSkill(cwd, "alpha-skill");
+  writeSkill(cwd, "beta-skill");
+  const subset = neo(["sub", "create"], {
+    cwd,
+    env,
+    input: "filtered\n\nFiltered review.\nfable\n\nn\nn\n2\n\nBody.\n",
+  });
+  expect(subset.status).toBe(0);
+  expect(subset.stderr).toContain("Skills (all selected).");
+  expect(subset.stderr).toContain("1. alpha-skill");
+  expect(subset.stderr).toContain("2. beta-skill");
+  expect(subset.stderr).toContain("Skills (1 selected).");
+  const dest = join(cwd, ".agents", "subs", "filtered.md");
+  expect(parseSubMd(readFileSync(dest, "utf8"), dest).skills).toEqual({
+    kind: "only",
+    names: ["alpha-skill"],
+  });
+});
+
+test("neo sub create wizard Enter keeps all skills as skills: true", () => {
+  const { cwd, env } = gitRepo();
+  writeSkill(cwd, "alpha-skill");
+  writeSkill(cwd, "beta-skill");
+  const result = neo(["sub", "create"], {
+    cwd,
+    env,
+    input: "all-skills\n\nAll skills.\nfable\n\nn\nn\n\nBody.\n",
+  });
+  expect(result.status).toBe(0);
+  const dest = join(cwd, ".agents", "subs", "all-skills.md");
+  expect(readFileSync(dest, "utf8")).toContain("skills: true");
+  expect(parseSubMd(readFileSync(dest, "utf8"), dest).skills).toEqual({ kind: "all" });
+});
+
+test("neo sub update --skills sets an allowlist", () => {
+  const { cwd, env } = gitRepo();
+  writeSkill(cwd, "alpha-skill");
+  const dest = writeSub(
+    cwd,
+    "tiny",
+    `---
+description: A tiny sub.
+model: fable
+skills: true
+---
+Do the thing.
+`,
+  );
+  const result = neo(["sub", "update", "tiny", "--skills", "alpha-skill"], { cwd, env });
+  expect(result.status).toBe(0);
+  expect(parseSubMd(readFileSync(dest, "utf8"), dest).skills).toEqual({
+    kind: "only",
+    names: ["alpha-skill"],
+  });
+});
+
+test("neo sub update --skills false turns skills off", () => {
+  const { cwd, env } = gitRepo();
+  const dest = writeSub(
+    cwd,
+    "tiny",
+    `---
+description: A tiny sub.
+model: fable
+skills: true
+---
+Do the thing.
+`,
+  );
+  const result = neo(["sub", "update", "tiny", "--skills", "false"], { cwd, env });
+  expect(result.status).toBe(0);
+  const text = readFileSync(dest, "utf8");
+  expect(text).not.toContain("skills");
+  expect(parseSubMd(text, dest).skills).toEqual({ kind: "off" });
+});
+
+test("neo sub update --skills rejects a name that is not in cwd", () => {
+  const { cwd, env } = gitRepo();
+  const dest = writeSub(
+    cwd,
+    "tiny",
+    `---
+description: A tiny sub.
+model: fable
+skills: true
+---
+Do the thing.
+`,
+  );
+  const result = neo(["sub", "update", "tiny", "--skills", "missing-skill"], { cwd, env });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("skill not found");
+  expect(parseSubMd(readFileSync(dest, "utf8"), dest).skills).toEqual({ kind: "all" });
 });

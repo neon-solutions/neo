@@ -5,9 +5,10 @@ import { createNeonGateway, resolveModelId } from "../plugins/neon-ai-gateway";
 import {
   SKILL_TOOL_INSTRUCTION,
   createSkillTools,
-  discoverSkills,
+  discoverSkillsForFilter,
   formatSkillsCatalog,
 } from "../plugins/skills";
+import type { SkillsFilter } from "../plugins/skills";
 import { createTools } from "../plugins/tools";
 
 export type RunRequest = {
@@ -17,7 +18,7 @@ export type RunRequest = {
   gateway?: Gateway;
   readonly: boolean;
   agentsMd: boolean;
-  skills: boolean;
+  skills: SkillsFilter;
   subPrompt?: string;
 };
 
@@ -73,7 +74,7 @@ function summarizeToolInput(input: unknown): string {
 
 export async function run(request: RunRequest): Promise<string> {
   const agentsMd = request.agentsMd ? await loadAgentsMd(request.cwd) : undefined;
-  const discovered = request.skills ? await discoverSkills({ cwd: request.cwd }) : undefined;
+  const discovered = await discoverSkillsForFilter({ cwd: request.cwd, filter: request.skills });
   const inspectTools = createTools(request.cwd, { readonly: request.readonly });
   const tools =
     discovered === undefined ? inspectTools : { ...inspectTools, ...createSkillTools(discovered) };
