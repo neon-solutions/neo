@@ -40,11 +40,22 @@ prints the live catalog (id and name) from this branch's gateway.
 neo sub list
 neo sub details pr-review
 neo sub pr-review --prompt "Review PR 123. One concern: the CLI."
+neo sub create
+neo sub create eng-review \
+  --description "Critical engineering review of an open PR." \
+  --model sol \
+  --cwd ~/workspaces \
+  --readonly --agents-md --skills \
+  --body-file /tmp/system-prompt.md
+neo sub update eng-review --model fable
+neo sub delete eng-review --yes
 ```
 
 A **sub** is a named launch template: model, flags, optional cwd, and a system prompt, so the parent supplies only the task prompt. `neo sub list` prints names and descriptions, never the system prompt. `neo sub details <name>` prints the full template, including the body, and tells the parent not to repeat that body in `--prompt`. Launch flags (`--model`, `--readonly`, `--agents-md`, `--skills`) cannot be overridden; they live in the file.
 
-Discovery: `.agents/subs/<name>.md` from the invocation directory up to the git root, then `~/.agents/subs/<name>.md`. Project shadows global. User-wide jobs belong under `~/.agents/subs/` so they resolve from a nested clone. A sub may pin `cwd` for the run (`--agents-md` and `--skills` walk that directory); there is still no `--cwd` flag.
+`neo sub create` writes that file. With no flags it prompts on stderr (name, project vs global, description, model, cwd, readonly / agents-md / skills, then the system prompt until Ctrl-D) and prints the path on stdout. Pass every required flag (`name`, `--description`, `--model`, `--body` or `--body-file`) and it does not prompt; `--global` writes to `~/.agents/subs/`, otherwise the project `.agents/subs/` (git root, or the invocation directory if there is no git). `neo sub update <name>` changes fields on the discovered file (project shadows global). `neo sub delete <name>` removes that file after `y/N`; `--yes` skips the confirm. `list`, `help`, `details`, `create`, `update`, and `delete` are reserved filenames.
+
+Discovery: `.agents/subs/<name>.md` from the invocation directory up to the git root, then `~/.agents/subs/<name>.md`. Project shadows global. `update` and `delete` act on the winner; a shadowed global is edited by removing the project file first, or by editing the global file directly. User-wide jobs belong under `~/.agents/subs/` so they resolve from a nested clone. A sub may pin `cwd` for the run (`--agents-md` and `--skills` walk that directory); there is still no `--cwd` flag on launch.
 
 ```markdown
 ---

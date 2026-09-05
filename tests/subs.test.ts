@@ -558,13 +558,13 @@ Body.
   expect(result.stderr).toContain("reserved");
 });
 
-test("reserved details.md fails on any sub invocation", () => {
+test("reserved create.md fails on any sub invocation", () => {
   const cwd = tmp();
   const home = tmp();
   mkdirSync(join(cwd, ".git"));
   const path = writeSub(
     cwd,
-    "details",
+    "create",
     `---
 description: Reserved.
 model: fable
@@ -572,7 +572,47 @@ model: fable
 Body.
 `,
   );
-  const result = neo(["sub", "details", "details"], { cwd, env: isolatedEnv(home) });
+  const result = neo(["sub", "list"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain(path);
+  expect(result.stderr).toContain("reserved");
+});
+
+test("reserved update.md fails on any sub invocation", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  const path = writeSub(
+    cwd,
+    "update",
+    `---
+description: Reserved.
+model: fable
+---
+Body.
+`,
+  );
+  const result = neo(["sub", "list"], { cwd, env: isolatedEnv(home) });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain(path);
+  expect(result.stderr).toContain("reserved");
+});
+
+test("reserved delete.md fails on any sub invocation", () => {
+  const cwd = tmp();
+  const home = tmp();
+  mkdirSync(join(cwd, ".git"));
+  const path = writeSub(
+    cwd,
+    "delete",
+    `---
+description: Reserved.
+model: fable
+---
+Body.
+`,
+  );
+  const result = neo(["sub", "list"], { cwd, env: isolatedEnv(home) });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain(path);
   expect(result.stderr).toContain("reserved");

@@ -2,13 +2,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { NeoError } from "../lib/errors";
-import { splitFrontmatter } from "../lib/frontmatter";
+import { parseYamlMap, splitFrontmatter } from "../lib/frontmatter";
 import { errorCode, walkToGitRoot } from "../lib/paths";
 import { isSkillName } from "./skills";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 const LIST_WRAP = 78;
-const RESERVED_NAMES = new Set(["list", "help", "details"]);
+export const RESERVED_NAMES = new Set(["list", "help", "details", "create", "update", "delete"]);
 const KNOWN_KEYS = new Set(["description", "model", "cwd", "readonly", "agents-md", "skills"]);
 
 export type ParsedSub = {
@@ -30,6 +30,21 @@ export type SubRecord = ParsedSub & {
 export type DiscoverSubsArgs = {
   cwd: string;
   home?: string;
+};
+
+export type ComposeSubFields = {
+  description: string;
+  model: string;
+  cwd?: string;
+  readonly: boolean;
+  agentsMd: boolean;
+  skills: boolean;
+};
+
+export type SubTargetDirArgs = {
+  cwd: string;
+  home: string;
+  global: boolean;
 };
 
 export function parseSubMd(text: string, filePath: string): ParsedSub {
@@ -89,6 +104,87 @@ export function parseSubMd(text: string, filePath: string): ParsedSub {
     skills: parseBool(split.fields.get("skills"), "skills", filePath, false),
     systemPrompt,
   };
+}
+
+export function composeSubMd(fields: ComposeSubFields, body: string): string {
+  const description = fields.description;
+  if (description.trim().length === 0) {
+    throw new NeoError("neo: missing description");
+  }
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new NeoError(`neo: description must be at most ${MAX_DESCRIPTION_LENGTH} characters`);
+  }
+
+  const model = fields.model.trim();
+  if (model.length === 0) {
+    throw new NeoError("neo: missing model");
+  }
+
+  const systemPrompt = body.trim();
+  if (systemPrompt.length === 0) {
+    throw new NeoError("neo: body is empty");
+  }
+
+  let cwd: string | undefined;
+  if (fields.cwd !== undefined) {
+    cwd = fields.cwd.trim();
+    if (cwd.length === 0) {
+      throw new NeoError("neo: cwd must not be empty");
+    }
+    if (cwd !== "~" && !cwd.startsWith("~/") && !isAbsolute(cwd)) {
+      throw new NeoError("neo: cwd must be an absolute path");
+    }
+  }
+
+  const frontmatter = [
+    "---",
+    `description: ${encodeYamlValue("description", description)}`,
+    `model: ${encodeYamlValue("model", model)}`,
+  ];
+  if (cwd !== undefined) {
+    frontmatter.push(`cwd: ${encodeYamlValue("cwd", cwd)}`);
+  }
+  if (fields.readonly) {
+    frontmatter.push("readonly: true");
+  }
+  if (fields.agentsMd) {
+    frontmatter.push("agents-md: true");
+  }
+  if (fields.skills) {
+    frontmatter.push("skills: true");
+  }
+  frontmatter.push("---");
+  const text = `${frontmatter.join("\n")}\n${systemPrompt}\n`;
+
+  const parsed = parseSubMd(text, "/composed.md");
+  if (
+    parsed.description !== description ||
+    parsed.model !== model ||
+    parsed.cwd !== cwd ||
+    parsed.readonly !== fields.readonly ||
+    parsed.agentsMd !== fields.agentsMd ||
+    parsed.skills !== fields.skills ||
+    parsed.systemPrompt !== systemPrompt
+  ) {
+    throw new NeoError("neo: composed template did not round-trip");
+  }
+  return text;
+}
+
+export function subTargetDir(args: SubTargetDirArgs): string {
+  if (args.global) {
+    return join(args.home, ".agents", "subs");
+  }
+  const walked = walkToGitRoot(args.cwd);
+  const root = walked[walked.length - 1];
+  if (root === undefined) {
+    throw new NeoError("neo: could not resolve project directory");
+  }
+  return join(root, ".agents", "subs");
+}
+
+export function isReservedSubName(name: string): boolean {
+  return RESERVED_NAMES.has(name);
 }
 
 export async function discoverSubs(args: DiscoverSubsArgs): Promise<SubRecord[]> {
@@ -208,6 +304,39 @@ export function missingSubMessage(name: string, subs: SubRecord[]): string {
   return `neo: sub "${name}" not found. Available: ${listed}`;
 }
 
+function encodeYamlValue(key: string, value: string): string {
+  const candidates = [value];
+  if (!value.includes('"')) {
+    candidates.push(`"${value}"`);
+  }
+  if (!value.includes("'")) {
+    candidates.push(`'${value}'`);
+  }
+  candidates.push(blockScalar(value));
+  for (const encoded of candidates) {
+    if (yamlValueRoundTrips(key, value, encoded)) {
+      return encoded;
+    }
+  }
+  throw new NeoError(`neo: cannot serialize ${key}`);
+}
+
+function blockScalar(value: string): string {
+  return `|-\n${value
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n")}`;
+}
+
+function yamlValueRoundTrips(key: string, intended: string, encoded: string): boolean {
+  try {
+    const map = parseYamlMap(`${key}: ${encoded}`.split("\n"), { strict: true, source: "compose" });
+    return map.get(key) === intended;
+  } catch {
+    return false;
+  }
+}
+
 function subNameFromPath(filePath: string): string {
   const file = basename(filePath);
   if (!file.endsWith(".md")) {
@@ -238,7 +367,11 @@ function parseBool(
   throw new NeoError(`neo: ${filePath}: ${key} must be true or false`);
 }
 
-async function resolveExistingCwd(raw: string, home: string, filePath: string): Promise<string> {
+export async function resolveExistingCwd(
+  raw: string,
+  home: string,
+  filePath: string,
+): Promise<string> {
   let expanded: string;
   if (raw === "~") {
     expanded = home;

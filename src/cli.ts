@@ -5,6 +5,14 @@ import { Command } from "commander";
 import { NeoError } from "./lib/errors";
 import { listModels, run } from "./lib/run";
 import { createNeonGateway } from "./plugins/neon-ai-gateway";
+import {
+  createSub,
+  deleteSub,
+  updateSub,
+  type CreateSubOptions,
+  type DeleteSubOptions,
+  type UpdateSubOptions,
+} from "./plugins/subs-author";
 import { discoverSubs, formatSubDetails, formatSubsList, missingSubMessage } from "./plugins/subs";
 
 function requireValue(value: string): string {
@@ -168,6 +176,52 @@ async function main(argv: string[]): Promise<void> {
     .action(async (name: string) => {
       assertSealedRootFlags(program);
       await printSubDetails(name);
+    });
+  sub
+    .command("create")
+    .description("Create a sub launch template")
+    .argument("[name]", "sub name")
+    .option("--description <text>", "short description")
+    .option("-m, --model <id>", "model id (catalog id or alias, for example fable)", requireValue)
+    .option("--cwd <path>", "working directory for the sub (absolute or ~/)")
+    .option("--readonly", "omit write and edit tools", false)
+    .option("--agents-md", "load AGENTS.md into the system prompt", false)
+    .option("--skills", "discover Agent Skills", false)
+    .option("--global", "write to ~/.agents/subs/", false)
+    .option("--body <text>", "system prompt")
+    .option("--body-file <path>", "read the system prompt from a file")
+    .action(async (name: string | undefined, opts: CreateSubOptions, command: Command) => {
+      assertSealedRootFlags(program);
+      const dest = await createSub({ name, opts, command, cwd: process.cwd() });
+      writeAnswer(dest);
+    });
+  sub
+    .command("update")
+    .description("Update a sub launch template")
+    .argument("<name>", "sub name")
+    .option("--description <text>", "short description")
+    .option("-m, --model <id>", "model id (catalog id or alias, for example fable)", requireValue)
+    .option("--cwd <path>", "working directory for the sub (absolute or ~/)")
+    .option("--clear-cwd", "remove cwd from the template", false)
+    .option("--readonly <true|false>", "set readonly")
+    .option("--agents-md <true|false>", "set agents-md")
+    .option("--skills <true|false>", "set skills")
+    .option("--body <text>", "system prompt")
+    .option("--body-file <path>", "read the system prompt from a file")
+    .action(async (name: string, opts: UpdateSubOptions, command: Command) => {
+      assertSealedRootFlags(program);
+      const dest = await updateSub({ name, opts, command, cwd: process.cwd() });
+      writeAnswer(dest);
+    });
+  sub
+    .command("delete")
+    .description("Delete a sub launch template")
+    .argument("<name>", "sub name")
+    .option("-y, --yes", "do not confirm", false)
+    .action(async (name: string, opts: DeleteSubOptions) => {
+      assertSealedRootFlags(program);
+      const dest = await deleteSub({ name, opts, cwd: process.cwd() });
+      writeAnswer(dest);
     });
   sub
     .argument("[name]", "sub name")
