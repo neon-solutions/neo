@@ -1,4 +1,5 @@
-import { access, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Command } from "commander";
@@ -47,29 +48,37 @@ export type DeleteSubOptions = {
   yes: boolean;
 };
 
-export async function createSub(args: {
-  name: string | undefined;
-  opts: CreateSubOptions;
-  command: Command;
-  cwd: string;
-}): Promise<string> {
-  if (args.opts.body !== undefined && args.opts.bodyFile !== undefined) {
+export async function createSub(
+  nameArg: string | undefined,
+  opts: CreateSubOptions,
+  command: Command,
+  cwd: string,
+): Promise<string> {
+  const optBody = opts.body;
+  const optBodyFile = opts.bodyFile;
+  const optDescription = opts.description;
+  const optModel = opts.model;
+  const optCwd = opts.cwd;
+  const optReadonly = opts.readonly;
+  const optAgentsMd = opts.agentsMd;
+  const optSkills = opts.skills;
+  if (optBody !== undefined && optBodyFile !== undefined) {
     throw new NeoError("neo: use --body or --body-file, not both");
   }
 
   const home = homedir();
-  const cli = (key: string): boolean => args.command.getOptionValueSource(key) === "cli";
-  const wizard = needsCreateWizard(args.name, cli);
-  const prompter = wizard ? createPrompter(process.stdin, process.stderr) : undefined;
+  const cli = (key: string): boolean => command.getOptionValueSource(key) === "cli";
+  const wizard = needsCreateWizard(nameArg, cli);
+  const prompter = wizard ? createPrompter() : undefined;
 
-  const name = await resolveName({ given: args.name, wizard, prompter });
+  const name = await resolveName({ given: nameArg, wizard, prompter });
   const global = await resolveGlobal({
     flagged: cli("global"),
     wizard,
     prompter,
   });
   const description = await resolveRequiredText({
-    given: cli("description") ? args.opts.description : undefined,
+    given: cli("description") ? optDescription : undefined,
     wizard,
     prompter,
     prompt: "Description: ",
@@ -77,43 +86,43 @@ export async function createSub(args: {
     parse: parseDescription,
   });
   const model = await resolveRequiredText({
-    given: cli("model") ? args.opts.model : undefined,
+    given: cli("model") ? optModel : undefined,
     wizard,
     prompter,
     prompt: "Model (see: neo models list): ",
     field: "model",
     parse: parseModel,
   });
-  const cwd = await resolveCwd({
-    given: cli("cwd") ? args.opts.cwd : undefined,
+  const cwdValue = await resolveCwd({
+    given: cli("cwd") ? optCwd : undefined,
     wizard,
     prompter,
     home,
   });
   const readonly = await resolveBool({
     flagged: cli("readonly"),
-    value: args.opts.readonly,
+    value: optReadonly,
     wizard,
     prompter,
     prompt: "readonly? [y/N] ",
   });
   const agentsMd = await resolveBool({
     flagged: cli("agentsMd"),
-    value: args.opts.agentsMd,
+    value: optAgentsMd,
     wizard,
     prompter,
     prompt: "agents-md? [y/N] ",
   });
   const skills = await resolveBool({
     flagged: cli("skills"),
-    value: args.opts.skills,
+    value: optSkills,
     wizard,
     prompter,
     prompt: "skills? [y/N] ",
   });
   const body = await resolveBody({
-    body: cli("body") ? args.opts.body : undefined,
-    bodyFile: cli("bodyFile") ? args.opts.bodyFile : undefined,
+    body: cli("body") ? optBody : undefined,
+    bodyFile: cli("bodyFile") ? optBodyFile : undefined,
     wizard,
     prompter,
   });
@@ -121,30 +130,26 @@ export async function createSub(args: {
   const fields: ComposeSubFields = {
     description,
     model,
-    cwd,
+    cwd: cwdValue,
     readonly,
     agentsMd,
     skills,
   };
   const text = composeSubMd(fields, body);
-  const dir = subTargetDir({ cwd: args.cwd, home, global });
+  const dir = subTargetDir({ cwd, home, global });
   const dest = join(dir, `${name}.md`);
 
-  const subs = await discoverSubs({ cwd: args.cwd, home });
+  const subs = await discoverSubs({ cwd, home });
   const existing = subs.find((sub) => sub.name === name);
   if (existing !== undefined && existing.path === dest) {
     throw new NeoError(`neo: ${dest} already exists; use "neo sub update ${name}"`);
   }
 
   await mkdir(dir, { recursive: true });
-  try {
-    await writeFile(dest, text, { encoding: "utf8", flag: "wx" });
-  } catch (error) {
-    if (errorCode(error) === "EEXIST") {
-      throw new NeoError(`neo: ${dest} already exists; use "neo sub update ${name}"`);
-    }
-    throw error;
+  if (existsSync(dest)) {
+    throw new NeoError(`neo: ${dest} already exists; use "neo sub update ${name}"`);
   }
+  await writeFile(dest, text, "utf8");
 
   if (existing !== undefined) {
     if (global) {
@@ -156,17 +161,25 @@ export async function createSub(args: {
   return dest;
 }
 
-export async function updateSub(args: {
-  name: string;
-  opts: UpdateSubOptions;
-  command: Command;
-  cwd: string;
-}): Promise<string> {
-  const name = parseSubName(args.name);
-  if (args.opts.body !== undefined && args.opts.bodyFile !== undefined) {
+export async function updateSub(
+  nameArg: string,
+  opts: UpdateSubOptions,
+  command: Command,
+  cwd: string,
+): Promise<string> {
+  const name = parseSubName(nameArg);
+  const optBody = opts.body;
+  const optBodyFile = opts.bodyFile;
+  const optDescription = opts.description;
+  const optModel = opts.model;
+  const optCwd = opts.cwd;
+  const optReadonly = opts.readonly;
+  const optAgentsMd = opts.agentsMd;
+  const optSkills = opts.skills;
+  if (optBody !== undefined && optBodyFile !== undefined) {
     throw new NeoError("neo: use --body or --body-file, not both");
   }
-  const cli = (key: string): boolean => args.command.getOptionValueSource(key) === "cli";
+  const cli = (key: string): boolean => command.getOptionValueSource(key) === "cli";
   const cwdFlagged = cli("cwd");
   const clearCwd = cli("clearCwd");
   if (cwdFlagged && clearCwd) {
@@ -189,7 +202,7 @@ export async function updateSub(args: {
   }
 
   const home = homedir();
-  const subs = await discoverSubs({ cwd: args.cwd, home });
+  const subs = await discoverSubs({ cwd, home });
   const sub = subs.find((entry) => entry.name === name);
   if (sub === undefined) {
     throw new NeoError(missingSubMessage(name, subs));
@@ -197,50 +210,51 @@ export async function updateSub(args: {
 
   const parsed = parseSubMd(await readFile(sub.path, "utf8"), sub.path);
   const description = cli("description")
-    ? parseDescription(mustTrimmed(args.opts.description, "description"))
+    ? parseDescription(mustTrimmed(optDescription, "description"))
     : parsed.description;
-  const model = cli("model") ? parseModel(mustTrimmed(args.opts.model, "model")) : parsed.model;
-  let cwd = parsed.cwd;
+  const model = cli("model") ? parseModel(mustTrimmed(optModel, "model")) : parsed.model;
+  let nextCwd = parsed.cwd;
   if (clearCwd) {
-    cwd = undefined;
+    nextCwd = undefined;
   } else if (cwdFlagged) {
-    cwd = await requireCwd(mustTrimmed(args.opts.cwd, "cwd"), home);
+    nextCwd = await requireCwd(mustTrimmed(optCwd, "cwd"), home);
   }
   const readonly = cli("readonly")
-    ? parseTrueFalse(mustTrimmed(args.opts.readonly, "readonly"), "readonly")
+    ? parseTrueFalse(mustTrimmed(optReadonly, "readonly"), "readonly")
     : parsed.readonly;
   const agentsMd = cli("agentsMd")
-    ? parseTrueFalse(mustTrimmed(args.opts.agentsMd, "agents-md"), "agents-md")
+    ? parseTrueFalse(mustTrimmed(optAgentsMd, "agents-md"), "agents-md")
     : parsed.agentsMd;
   const skills = cli("skills")
-    ? parseTrueFalse(mustTrimmed(args.opts.skills, "skills"), "skills")
+    ? parseTrueFalse(mustTrimmed(optSkills, "skills"), "skills")
     : parsed.skills;
   const body = cli("body")
-    ? parseBody(mustTrimmed(args.opts.body, "body"))
+    ? parseBody(mustTrimmed(optBody, "body"))
     : cli("bodyFile")
-      ? parseBody(await readBodyFile(mustTrimmed(args.opts.bodyFile, "body-file")))
+      ? parseBody(await readBodyFile(mustTrimmed(optBodyFile, "body-file")))
       : parsed.systemPrompt;
 
-  const text = composeSubMd({ description, model, cwd, readonly, agentsMd, skills }, body);
-  await writeAtomic(sub.path, text);
+  const text = composeSubMd({ description, model, cwd: nextCwd, readonly, agentsMd, skills }, body);
+  await writeFile(sub.path, text, "utf8");
   return sub.path;
 }
 
-export async function deleteSub(args: {
-  name: string;
-  opts: DeleteSubOptions;
-  cwd: string;
-}): Promise<string> {
-  const name = parseSubName(args.name);
+export async function deleteSub(
+  nameArg: string,
+  opts: DeleteSubOptions,
+  cwd: string,
+): Promise<string> {
+  const name = parseSubName(nameArg);
+  const yes = opts.yes;
   const home = homedir();
-  const subs = await discoverSubs({ cwd: args.cwd, home });
+  const subs = await discoverSubs({ cwd, home });
   const sub = subs.find((entry) => entry.name === name);
   if (sub === undefined) {
     throw new NeoError(missingSubMessage(name, subs));
   }
 
-  if (!args.opts.yes) {
-    const prompter = createPrompter(process.stdin, process.stderr);
+  if (!yes) {
+    const prompter = createPrompter();
     const answer = await prompter.ask(`Delete ${sub.path}? [y/N] `);
     if (answer === undefined || !isYes(answer)) {
       throw new NeoError("neo: delete aborted");
@@ -249,7 +263,7 @@ export async function deleteSub(args: {
 
   const globalPath = join(home, ".agents", "subs", `${name}.md`);
   const revealsGlobal =
-    sub.source === "project" && sub.path !== globalPath && (await pathExists(globalPath));
+    sub.source === "project" && sub.path !== globalPath && existsSync(globalPath);
   await unlink(sub.path);
   if (revealsGlobal) {
     process.stderr.write(`neo: ${globalPath} is now visible\n`);
@@ -529,24 +543,6 @@ async function readBodyFile(path: string): Promise<string> {
   } catch (error) {
     if (errorCode(error) === "ENOENT") {
       throw new NeoError(`neo: --body-file not found: ${path}`);
-    }
-    throw error;
-  }
-}
-
-async function writeAtomic(dest: string, text: string): Promise<void> {
-  const tmpPath = `${dest}.${process.pid}.tmp`;
-  await writeFile(tmpPath, text, { encoding: "utf8" });
-  await rename(tmpPath, dest);
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") {
-      return false;
     }
     throw error;
   }

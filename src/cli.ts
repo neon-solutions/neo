@@ -192,7 +192,7 @@ async function main(argv: string[]): Promise<void> {
     .option("--body-file <path>", "read the system prompt from a file")
     .action(async (name: string | undefined, opts: CreateSubOptions, command: Command) => {
       assertSealedRootFlags(program);
-      const dest = await createSub({ name, opts, command, cwd: process.cwd() });
+      const dest = await createSub(name, opts, command, process.cwd());
       writeAnswer(dest);
     });
   sub
@@ -210,7 +210,7 @@ async function main(argv: string[]): Promise<void> {
     .option("--body-file <path>", "read the system prompt from a file")
     .action(async (name: string, opts: UpdateSubOptions, command: Command) => {
       assertSealedRootFlags(program);
-      const dest = await updateSub({ name, opts, command, cwd: process.cwd() });
+      const dest = await updateSub(name, opts, command, process.cwd());
       writeAnswer(dest);
     });
   sub
@@ -220,7 +220,7 @@ async function main(argv: string[]): Promise<void> {
     .option("-y, --yes", "do not confirm", false)
     .action(async (name: string, opts: DeleteSubOptions) => {
       assertSealedRootFlags(program);
-      const dest = await deleteSub({ name, opts, cwd: process.cwd() });
+      const dest = await deleteSub(name, opts, process.cwd());
       writeAnswer(dest);
     });
   sub
