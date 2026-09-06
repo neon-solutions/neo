@@ -7,7 +7,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,12 +41,93 @@ function neo(args: string[], options?: { cwd?: string; env?: NodeJS.ProcessEnv; 
   });
 }
 
+function neoAsync(
+  args: string[],
+  options?: { cwd?: string; env?: NodeJS.ProcessEnv; input?: string },
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("bun", [cli, ...args], {
+      cwd: options?.cwd ?? root,
+      env: options?.env ?? process.env,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (status) => {
+      resolve({ status, stdout, stderr });
+    });
+    child.stdin.end(options?.input ?? "");
+  });
+}
+
 function isolatedEnv(home: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home };
   delete env.NEON_AI_GATEWAY_TOKEN;
   delete env.NEON_AI_GATEWAY_BASE_URL;
   return env;
 }
+
+function catalogEnv(home: string, baseURL: string): NodeJS.ProcessEnv {
+  return {
+    ...isolatedEnv(home),
+    NEON_AI_GATEWAY_TOKEN: "test-token",
+    NEON_AI_GATEWAY_BASE_URL: baseURL,
+  };
+}
+
+async function listen(
+  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
+): Promise<{ baseURL: string; close: () => Promise<void> }> {
+  const server = http.createServer(handler);
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  const addr = server.address();
+  if (addr === null || typeof addr === "string") {
+    throw new Error("expected a TCP address");
+  }
+  return {
+    baseURL: `http://127.0.0.1:${String(addr.port)}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
+}
+
+async function withModelsCatalog(
+  models: { id: string; name: string }[],
+  run: (baseURL: string) => Promise<void>,
+): Promise<void> {
+  const { baseURL, close } = await listen((_req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ data: models }));
+  });
+  try {
+    await run(baseURL);
+  } finally {
+    await close();
+  }
+}
+
+const catalogFixture = [
+  { id: "gpt-5-6-sol", name: "GPT-5.6 Sol" },
+  { id: "claude-fable-5", name: "Claude Fable 5" },
+];
 
 function writeSub(dir: string, name: string, contents: string): string {
   const folder = join(dir, ".agents", "subs");
@@ -544,7 +626,8 @@ test("neo sub create wizard reads stdin and writes prompts to stderr", () => {
   expect(result.stderr).toContain("Name: ");
   expect(result.stderr).toContain("Location (project/global) [project]: ");
   expect(result.stderr).toContain("Description: ");
-  expect(result.stderr).toContain("Model (see: neo models list): ");
+  expect(result.stderr).toContain("Model id: ");
+  expect(result.stderr).not.toContain("Models:");
   expect(result.stderr).toContain("cwd (absolute or ~/, empty to skip): ");
   expect(result.stderr).toContain("readonly? [y/N] ");
   expect(result.stderr).toContain("agents-md? [y/N] ");
@@ -584,6 +667,90 @@ test("neo sub create wizard errors when stdin ends at a required prompt", () => 
   expect(result.stdout).toBe("");
   expect(result.stderr).toContain("missing model");
   expect(existsSync(join(cwd, ".agents", "subs", "eng-review.md"))).toBe(false);
+});
+
+test("neo sub create wizard lists catalog models and picks by number", async () => {
+  const { cwd, home } = gitRepo();
+  await withModelsCatalog(catalogFixture, async (baseURL) => {
+    const result = await neoAsync(["sub", "create"], {
+      cwd,
+      env: catalogEnv(home, baseURL),
+      input: "eng-review\n\nA review sub.\n1\n\nn\nn\nn\nBody.\n",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("Models:");
+    expect(result.stderr).toContain("1. claude-fable-5");
+    expect(result.stderr).toContain("2. gpt-5-6-sol");
+    expect(result.stderr).toContain("3. Custom");
+    expect(result.stderr).toContain("Number or id: ");
+    const dest = join(cwd, ".agents", "subs", "eng-review.md");
+    expect(parseSubMd(readFileSync(dest, "utf8"), dest).model).toBe("claude-fable-5");
+  });
+});
+
+test("neo sub create wizard Custom asks for a model id", async () => {
+  const { cwd, home } = gitRepo();
+  await withModelsCatalog(catalogFixture, async (baseURL) => {
+    const result = await neoAsync(["sub", "create"], {
+      cwd,
+      env: catalogEnv(home, baseURL),
+      input: "eng-review\n\nA review sub.\n3\ngpt-6-astra\n\nn\nn\nn\nBody.\n",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("3. Custom");
+    expect(result.stderr).toContain("Model id: ");
+    const dest = join(cwd, ".agents", "subs", "eng-review.md");
+    expect(parseSubMd(readFileSync(dest, "utf8"), dest).model).toBe("gpt-6-astra");
+  });
+});
+
+test("neo sub create wizard accepts a typed id instead of a number", async () => {
+  const { cwd, home } = gitRepo();
+  await withModelsCatalog(catalogFixture, async (baseURL) => {
+    const result = await neoAsync(["sub", "create"], {
+      cwd,
+      env: catalogEnv(home, baseURL),
+      input: "eng-review\n\nA review sub.\ngpt-6-astra\n\nn\nn\nn\nBody.\n",
+    });
+    expect(result.status).toBe(0);
+    const dest = join(cwd, ".agents", "subs", "eng-review.md");
+    expect(parseSubMd(readFileSync(dest, "utf8"), dest).model).toBe("gpt-6-astra");
+  });
+});
+
+test("neo sub create wizard re-prompts an out-of-range catalog number", async () => {
+  const { cwd, home } = gitRepo();
+  await withModelsCatalog(catalogFixture, async (baseURL) => {
+    const result = await neoAsync(["sub", "create"], {
+      cwd,
+      env: catalogEnv(home, baseURL),
+      input: "eng-review\n\nA review sub.\n9\n1\n\nn\nn\nn\nBody.\n",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("enter a number 1-3, or a model id");
+    const dest = join(cwd, ".agents", "subs", "eng-review.md");
+    expect(parseSubMd(readFileSync(dest, "utf8"), dest).model).toBe("claude-fable-5");
+  });
+});
+
+test("neo sub create wizard fails when /v1/models fails", async () => {
+  const { cwd, home } = gitRepo();
+  const { baseURL, close } = await listen((_req, res) => {
+    res.writeHead(500);
+    res.end("nope");
+  });
+  try {
+    const result = await neoAsync(["sub", "create"], {
+      cwd,
+      env: catalogEnv(home, baseURL),
+      input: "eng-review\n\nA review sub.\n",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("gateway /v1/models failed");
+    expect(existsSync(join(cwd, ".agents", "subs", "eng-review.md"))).toBe(false);
+  } finally {
+    await close();
+  }
 });
 
 test("neo sub create with empty stdin fails at the name prompt", () => {

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Command } from "commander";
 import { createPrompter, type Prompter } from "../lib/ask";
+import type { ModelInfo } from "../lib/gateway";
 import { NeoError } from "../lib/errors";
 import { errorCode } from "../lib/paths";
 import {
@@ -26,6 +27,7 @@ import {
   uniqueSkillRecordNames,
 } from "./skills";
 import type { SkillsFilter } from "./skills";
+import { createNeonGateway, readNeonProviderConfig } from "./neon-ai-gateway";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 
@@ -94,13 +96,10 @@ export async function createSub(
     field: "description",
     parse: parseDescription,
   });
-  const model = await resolveRequiredText({
+  const model = await resolveModel({
     given: cli("model") ? optModel : undefined,
     wizard,
     prompter,
-    prompt: "Model (see: neo models list): ",
-    field: "model",
-    parse: parseModel,
   });
   const cwdValue = await resolveCwd({
     given: cli("cwd") ? optCwd : undefined,
@@ -350,6 +349,95 @@ async function resolveGlobal(args: {
       return true;
     }
     process.stderr.write("neo: location must be project or global\n");
+  }
+}
+
+async function resolveModel(args: {
+  given: string | undefined;
+  wizard: boolean;
+  prompter: Prompter | undefined;
+}): Promise<string> {
+  if (args.given !== undefined) {
+    return parseModel(args.given);
+  }
+  if (!args.wizard || args.prompter === undefined) {
+    throw new NeoError("neo: missing model");
+  }
+  const models = await loadCatalogModels();
+  if (models === undefined || models.length === 0) {
+    return await askModelId(args.prompter);
+  }
+  return await pickCatalogModel(args.prompter, models);
+}
+
+async function loadCatalogModels(): Promise<ModelInfo[] | undefined> {
+  if (readNeonProviderConfig() === undefined) {
+    return undefined;
+  }
+  const gateway = await createNeonGateway();
+  return await gateway.listModels();
+}
+
+function writeModelsMenu(models: ModelInfo[]): void {
+  process.stderr.write("Models:\n");
+  const idWidth = models.reduce((width, model) => Math.max(width, model.id.length), 0);
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    if (model === undefined) {
+      continue;
+    }
+    process.stderr.write(`  ${String(i + 1)}. ${model.id.padEnd(idWidth)}  ${model.name}\n`);
+  }
+  process.stderr.write(`  ${String(models.length + 1)}. Custom\n`);
+}
+
+async function pickCatalogModel(prompter: Prompter, models: ModelInfo[]): Promise<string> {
+  const sorted = models.slice().sort((a, b) => a.id.localeCompare(b.id));
+  writeModelsMenu(sorted);
+  const customNumber = sorted.length + 1;
+  for (;;) {
+    const line = await prompter.ask("Number or id: ");
+    if (line === undefined) {
+      throw new NeoError("neo: missing model");
+    }
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      process.stderr.write("neo: missing model\n");
+      continue;
+    }
+    if (/^[1-9][0-9]*$/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (n === customNumber) {
+        return await askModelId(prompter);
+      }
+      if (n >= 1 && n <= sorted.length) {
+        const model = sorted[n - 1];
+        if (model !== undefined) {
+          return model.id;
+        }
+      }
+      process.stderr.write(`neo: enter a number 1-${String(customNumber)}, or a model id\n`);
+      continue;
+    }
+    return parseModel(trimmed);
+  }
+}
+
+async function askModelId(prompter: Prompter): Promise<string> {
+  for (;;) {
+    const line = await prompter.ask("Model id: ");
+    if (line === undefined) {
+      throw new NeoError("neo: missing model");
+    }
+    try {
+      return parseModel(line);
+    } catch (error) {
+      if (error instanceof NeoError) {
+        process.stderr.write(`${error.message}\n`);
+        continue;
+      }
+      throw error;
+    }
   }
 }
 
