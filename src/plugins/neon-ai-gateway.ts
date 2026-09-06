@@ -12,6 +12,7 @@ import {
   writeNeonProviderConfig,
   type NeonProviderConfig,
 } from "../lib/neon-provider-config";
+import { fetchWith429Retry } from "../lib/fetch-429";
 import { setupNeonGateway } from "./neon-setup";
 
 export {
@@ -112,11 +113,12 @@ export async function createNeonGateway(): Promise<Gateway> {
   const neon = createNeon({
     baseURL: config.baseURL,
     apiKey: config.apiKey,
+    fetch: fetchWith429Retry,
   });
 
   return {
     async listModels(): Promise<ModelInfo[]> {
-      const response = await fetch(`${config.baseURL}/v1/models`, {
+      const response = await fetchWith429Retry(`${config.baseURL}/v1/models`, {
         headers: { Authorization: `Bearer ${config.apiKey}` },
       });
       const text = await response.text();

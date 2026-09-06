@@ -31,7 +31,8 @@ neo models list
 
 prints the live catalog (id and name) from this branch's gateway. `--model` still
 resolves short aliases from that list (`fable`, `sol`). An id the list does not
-contain is sent as written; the gateway accepts or rejects it.
+contain is sent as written; the gateway accepts or rejects it. A gateway `429`
+retries three times with short pauses before the run fails.
 
 ```bash
 neo sub list
