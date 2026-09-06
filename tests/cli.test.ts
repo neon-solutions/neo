@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { NeoError } from "../src/lib/errors";
 import {
   loadNeonProviderConfig,
   parseNeonProviderConfig,
@@ -153,8 +152,13 @@ test("resolveModelId accepts a catalog id and the fable alias", () => {
   expect(resolveModelId("fable", catalog)).toBe("claude-fable-5");
 });
 
-test("resolveModelId rejects unknown and ambiguous aliases", () => {
-  expect(() => resolveModelId("nope", catalog)).toThrow(NeoError);
+test("resolveModelId sends catalog-missing ids through", () => {
+  expect(resolveModelId("gpt-6-astra", catalog)).toBe("gpt-6-astra");
+  expect(resolveModelId("astra", catalog)).toBe("astra");
+  expect(resolveModelId("nope", catalog)).toBe("nope");
+});
+
+test("resolveModelId rejects ambiguous aliases", () => {
   expect(() => resolveModelId("5", catalog)).toThrow(/matches/);
 });
 

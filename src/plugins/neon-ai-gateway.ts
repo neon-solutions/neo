@@ -69,16 +69,19 @@ export function resolveModelId(query: string, models: ModelInfo[]): string {
 
   const suffix = `-${query}`;
   const suffixMatches = models.filter((model) => model.id.endsWith(suffix));
-  const [suffixMatch, ...rest] = suffixMatches;
-  if (suffixMatch !== undefined && rest.length === 0) {
-    return suffixMatch.id;
+  if (suffixMatches.length === 1) {
+    const match = suffixMatches[0];
+    if (match !== undefined) {
+      return match.id;
+    }
   }
   if (suffixMatches.length > 1) {
     const ids = suffixMatches.map((model) => model.id).join(", ");
     throw new NeoError(`neo: model "${query}" matches ${ids}`);
   }
 
-  throw new NeoError(`neo: unknown model "${query}"`);
+  // /v1/models lags ids the gateway already serves.
+  return query;
 }
 
 export type EnsureNeonProviderConfigOptions = {

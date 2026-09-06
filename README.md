@@ -29,7 +29,9 @@ neo --agents-md --skills --model fable --prompt "Implement the spec"
 neo models list
 ```
 
-prints the live catalog (id and name) from this branch's gateway.
+prints the live catalog (id and name) from this branch's gateway. `--model` still
+resolves short aliases from that list (`fable`, `sol`). An id the list does not
+contain is sent as written; the gateway accepts or rejects it.
 
 ```bash
 neo sub list
