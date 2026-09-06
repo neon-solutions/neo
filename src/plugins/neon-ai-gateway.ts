@@ -113,7 +113,6 @@ export async function createNeonGateway(): Promise<Gateway> {
   const neon = createNeon({
     baseURL: config.baseURL,
     apiKey: config.apiKey,
-    fetch: fetchWith429Retry,
   });
 
   return {

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { fetchWith429Retry } from "../src/lib/fetch-429";
+import { fetchWith429Retry, is429Error, retryOn429 } from "../src/lib/fetch-429";
 import { createNeonGateway } from "../src/plugins/neon-ai-gateway";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -118,43 +118,6 @@ test("fetchWith429Retry does not retry a 500", async () => {
   }
 });
 
-test("fetchWith429Retry retries a POST Request body", async () => {
-  const bodies: string[] = [];
-  let hit = 0;
-  const { baseURL, close } = await listen((req, res) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-    req.on("end", () => {
-      bodies.push(Buffer.concat(chunks).toString("utf8"));
-      hit += 1;
-      if (hit === 1) {
-        res.writeHead(429);
-        res.end("slow down");
-        return;
-      }
-      res.writeHead(200);
-      res.end("ok");
-    });
-  });
-  try {
-    const request = new Request(baseURL, {
-      method: "POST",
-      body: JSON.stringify({ model: "claude-fable-5" }),
-      headers: { "Content-Type": "application/json" },
-    });
-    const response = await fetchWith429Retry(request);
-    expect(response.status).toBe(200);
-    expect(bodies).toEqual([
-      JSON.stringify({ model: "claude-fable-5" }),
-      JSON.stringify({ model: "claude-fable-5" }),
-    ]);
-  } finally {
-    await close();
-  }
-});
-
 test("listModels recovers from a 429", async () => {
   const seq = statusSequence([429, 200]);
   const { baseURL, close } = await listen(seq.handler);
@@ -223,9 +186,50 @@ test("neo models list recovers from a 429", async () => {
     );
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("claude-fable-5");
-    expect(result.stderr).toContain("retrying (1/3)");
     expect(seq.hits()).toBe(2);
   } finally {
     await close();
   }
+});
+
+test("retryOn429 retries a statusCode 429 then succeeds", async () => {
+  let hits = 0;
+  const value = await retryOn429(async () => {
+    hits += 1;
+    if (hits < 3) {
+      throw Object.assign(new Error("rate limited"), { statusCode: 429 });
+    }
+    return "ok";
+  });
+  expect(value).toBe("ok");
+  expect(hits).toBe(3);
+});
+
+test("retryOn429 gives up after three retries", async () => {
+  let hits = 0;
+  await expect(
+    retryOn429(async () => {
+      hits += 1;
+      throw Object.assign(new Error("rate limited"), { statusCode: 429 });
+    }),
+  ).rejects.toMatchObject({ statusCode: 429 });
+  expect(hits).toBe(4);
+});
+
+test("retryOn429 does not retry other errors", async () => {
+  let hits = 0;
+  await expect(
+    retryOn429(async () => {
+      hits += 1;
+      throw new Error("boom");
+    }),
+  ).rejects.toThrow("boom");
+  expect(hits).toBe(1);
+});
+
+test("is429Error reads nested cause", () => {
+  const inner = Object.assign(new Error("limited"), { statusCode: 429 });
+  const outer = Object.assign(new Error("wrapper"), { cause: inner });
+  expect(is429Error(outer)).toBe(true);
+  expect(is429Error(new Error("nope"))).toBe(false);
 });

@@ -10,6 +10,7 @@ import {
 } from "../plugins/skills";
 import type { SkillsFilter } from "../plugins/skills";
 import { createTools } from "../plugins/tools";
+import { retryOn429 } from "./fetch-429";
 
 export type RunRequest = {
   model: string;
@@ -95,15 +96,18 @@ export async function run(request: RunRequest): Promise<string> {
     stopWhen: stepCountIs(20),
   });
 
-  const result = await agent.generate({
-    prompt: request.prompt,
-    onToolExecutionStart: ({ toolCall }) => {
-      const target = summarizeToolInput(toolCall.input);
-      process.stderr.write(`${toolCall.toolName} ${target}\n`);
-    },
+  const text = await retryOn429(async () => {
+    const result = await agent.generate({
+      prompt: request.prompt,
+      onToolExecutionStart: ({ toolCall }) => {
+        const target = summarizeToolInput(toolCall.input);
+        process.stderr.write(`${toolCall.toolName} ${target}\n`);
+      },
+    });
+    return result.text;
   });
 
-  return result.text;
+  return text;
 }
 
 export async function listModels(gateway: Gateway): Promise<string> {
