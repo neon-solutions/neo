@@ -83,6 +83,18 @@ The Neon gateway plugin reads `~/.config/neo/providers/neon.json`:
 
 If the file is missing, a terminal `neo` run offers Neon AI Gateway, signs in with the Neon CLI (`neon auth` when needed), lets you pick an org and a project (or create one), mints a branch credential, and writes that file. Non-interactive runs still fail until the file exists.
 
+## Reproduce Astra 429s
+
+`examples/hammer-astra-429.sh` walks through neo / `rg` / `gh` / gateway setup, lists open PRs on `neondatabase/website`, `neondatabase/mcp-server-neon`, and `neondatabase/neon-pkgs`, and starts three readonly `neo --model gpt-6-astra` agents per PR at once (security, engineering, DX). It counts `neo: gateway 429, retrying` lines and jobs that die on 429.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/neon-solutions/neo/main/examples/hammer-astra-429.sh -o hammer-astra-429.sh
+bash hammer-astra-429.sh --dry-run
+bash hammer-astra-429.sh
+```
+
+Default load is 3 PRs per repo, 27 agents. Each agent's first prompt inlines `gh pr view` plus a truncated `gh pr diff` so the burst is coding-sized, not a ping. `--setup-only` stops after credentials. `--copies 4` repeats the matrix. `--cwd <repo> --agents-md --skills` matches a parent coding agent. `--all` takes up to 20 PRs per repo.
+
 ## Design
 
 Capabilities are plugins. The core is the loop, the CLI, and the seams those plugins plug into.

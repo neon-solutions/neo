@@ -66,4 +66,5 @@ setup.sh                         curl | bash installer (rolling `latest` release
 install/                         Vercel proxy at https://getneo.sh
 .github/workflows/publish.yml    push to main → rolling `latest` release
 neon.ts                          preview.aiGateway
+examples/hammer-astra-429.sh     Shareable gpt-6-astra 429 repro (parallel PR reviews)
 ```
