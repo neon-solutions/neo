@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -8,15 +8,35 @@ import { expect, test } from "vitest";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(root, "src/cli.ts");
 
-function neo(args: string[], options?: { cwd?: string }) {
+function neoEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.NEON_AI_GATEWAY_TOKEN;
   delete env.NEON_AI_GATEWAY_BASE_URL;
+  return env;
+}
+
+function neo(args: string[], options?: { cwd?: string }) {
   return spawnSync("bun", [cli, ...args], {
     encoding: "utf8",
     cwd: options?.cwd ?? root,
-    env,
+    env: neoEnv(),
     timeout: 120_000,
+  });
+}
+
+// spawnSync blocks the Vitest worker; past ~60s its RPC times out.
+function neoAsync(
+  args: string[],
+  options: { cwd: string },
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("bun", [cli, ...args], { cwd: options.cwd, env: neoEnv() });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
   });
 }
 
@@ -51,6 +71,30 @@ test("write creates a file in the working directory", () => {
   expect(result.status).toBe(0);
   expect(readFileSync(join(dir, "ping.txt"), "utf8").trim()).toBe("ping");
 }, 120_000);
+
+test("a run past 20 tool steps still answers", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "neo-live-steps-"));
+  const hops = 25;
+  for (let hop = 1; hop <= hops; hop++) {
+    const contents =
+      hop === hops ? "final answer: neo-steps-nonce-91c2" : `next file: hop-${hop + 1}.txt`;
+    writeFileSync(join(dir, `hop-${hop}.txt`), `${contents}\n`);
+  }
+  const result = await neoAsync(
+    [
+      "--model",
+      "gpt-6-astra",
+      "--prompt",
+      "Read hop-1.txt with the read tool. It names the next file to read. Keep following the chain, one read call per file, until a file contains the final answer. Do not use bash, grep, glob, or ls. Reply with only the final answer.",
+    ],
+    { cwd: dir },
+  );
+  expect(result.status).toBe(0);
+  expect(
+    result.stderr.split("\n").filter((line) => line.startsWith("read ")).length,
+  ).toBeGreaterThan(20);
+  expect(result.stdout).toContain("neo-steps-nonce-91c2");
+}, 400_000);
 
 test("agents-md injects the file into the system prompt", () => {
   const dir = mkdtempSync(join(tmpdir(), "neo-live-agents-"));

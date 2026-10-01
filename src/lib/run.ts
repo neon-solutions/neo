@@ -1,4 +1,4 @@
-import { ToolLoopAgent, stepCountIs } from "ai";
+import { ToolLoopAgent, isLoopFinished } from "ai";
 import { loadAgentsMd } from "./agents-md";
 import type { Gateway } from "./gateway";
 import { createNeonGateway, resolveModelId } from "../plugins/neon-ai-gateway";
@@ -93,7 +93,8 @@ export async function run(request: RunRequest): Promise<string> {
       subPrompt: request.subPrompt,
     }),
     tools,
-    stopWhen: stepCountIs(20),
+    // Omitting stopWhen makes ToolLoopAgent default to isStepCount(20).
+    stopWhen: isLoopFinished(),
   });
 
   const text = await retryOn429(async () => {
