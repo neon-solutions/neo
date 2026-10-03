@@ -98,14 +98,14 @@ export async function run(request: RunRequest): Promise<string> {
   });
 
   const text = await retryOn429(async () => {
-    const result = await agent.stream({
+    const result = await agent.generate({
       prompt: request.prompt,
       onToolExecutionStart: ({ toolCall }) => {
         const target = summarizeToolInput(toolCall.input);
         process.stderr.write(`${toolCall.toolName} ${target}\n`);
       },
     });
-    return await result.text;
+    return result.text;
   });
 
   return text;
