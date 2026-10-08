@@ -19,6 +19,15 @@ Work on `main`. Push `main`. No feature branch, no PR. Keep a commit to one conc
 
 `bun run fmt` before you push. CI on `main` runs `bun run test:ci` (everything except `tests/live.test.ts`) plus typecheck, then publishes binaries. `bun run test` including live tests remains the pre-push gate.
 
+A change that touches how `ai` or another npm package runs also needs the live tests against the compiled binary, because scriptc runs npm code in an embedded engine with a smaller web-platform surface than Node:
+
+```bash
+scriptc build src/cli.ts --dynamic -o .scriptc/neo
+NEO_BIN=$PWD/.scriptc/neo bunx vitest run tests/live.test.ts
+```
+
+`packages/readable-stream-tee` installs `ReadableStream.prototype.tee` inside that engine, which `ToolLoopAgent.stream` needs.
+
 ## Plugins
 
 Capabilities are plugins. Keep the core limited to the loop, the CLI, and plugin seams.

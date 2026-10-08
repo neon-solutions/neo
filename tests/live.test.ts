@@ -7,6 +7,10 @@ import { expect, test } from "vitest";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(root, "src/cli.ts");
+// NEO_BIN runs the suite against a compiled scriptc binary instead of `bun src/cli.ts`.
+const neoBin = process.env.NEO_BIN;
+const command = neoBin ?? "bun";
+const commandArgs = (args: string[]) => (neoBin === undefined ? [cli, ...args] : args);
 
 function neoEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -16,7 +20,7 @@ function neoEnv(): NodeJS.ProcessEnv {
 }
 
 function neo(args: string[], options?: { cwd?: string }) {
-  return spawnSync("bun", [cli, ...args], {
+  return spawnSync(command, commandArgs(args), {
     encoding: "utf8",
     cwd: options?.cwd ?? root,
     env: neoEnv(),
@@ -30,7 +34,7 @@ function neoAsync(
   options: { cwd: string },
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn("bun", [cli, ...args], { cwd: options.cwd, env: neoEnv() });
+    const child = spawn(command, commandArgs(args), { cwd: options.cwd, env: neoEnv() });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));

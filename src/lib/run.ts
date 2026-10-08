@@ -1,3 +1,4 @@
+import "neo-readable-stream-tee";
 import { ToolLoopAgent, isLoopFinished } from "ai";
 import { loadAgentsMd } from "./agents-md";
 import type { Gateway } from "./gateway";
@@ -98,14 +99,14 @@ export async function run(request: RunRequest): Promise<string> {
   });
 
   const text = await retryOn429(async () => {
-    const result = await agent.generate({
+    const result = await agent.stream({
       prompt: request.prompt,
       onToolExecutionStart: ({ toolCall }) => {
         const target = summarizeToolInput(toolCall.input);
         process.stderr.write(`${toolCall.toolName} ${target}\n`);
       },
     });
-    return result.text;
+    return await result.text;
   });
 
   return text;

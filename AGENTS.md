@@ -20,7 +20,7 @@ Bun for install and scripts. Node.js >= 22 at runtime. Vitest. TypeScript, `stri
 
 ## Product constraints
 
-- Loop: Vercel AI SDK `ToolLoopAgent` with `stopWhen: isLoopFinished()`: no step cap; the run ends when the model answers without a tool call. Not Mastra. Not Pi.
+- Loop: Vercel AI SDK `ToolLoopAgent.stream` with `stopWhen: isLoopFinished()`: no step cap; the run ends when the model answers without a tool call. Not Mastra. Not Pi.
 - Gateway: Neon AI Gateway plugin (`@neon/ai-sdk-provider`). Credentials from `~/.config/neo/providers/neon.json` (`apiKey`, `baseURL`). `NEON_AI_GATEWAY_*` overrides when both are set. A TTY run with no credentials starts a Neon CLI wizard (the only provider): `neon auth` if needed, pick org, pick or create project, mint via `neon env pull -s ai-gateway`, write the file. Non-TTY still errors. Gateway `429`s retry 3 times with short pauses (200ms, 400ms, 800ms) before failing the run.
 - Tools: `read`, `grep`, `glob`, `ls`, `bash`, plus `write` and `edit` unless `--readonly`. `grep` and `glob` both shell out to `rg` (`glob` is `rg --files -g`). `--readonly` omits `write` and `edit`; `bash` can still mutate.
 - `--agents-md` loads every `AGENTS.md` from cwd up to the git root (farthest first). Fails if none exist. Off by default.
@@ -36,7 +36,7 @@ Work on `main`. Push `main`. No feature branch, no PR.
 
 1. Pull latest `main`.
 2. Implement. Keep the commit to one concern.
-3. `bun run test` and `bun run typecheck`.
+3. `bun run test` and `bun run typecheck`. When the change touches the AI SDK loop or another npm package, also run the live tests against the compiled binary (`NEO_BIN`, see `CONTRIBUTING.md`).
 4. `bun run fmt`.
 5. `git push origin main`. That push runs `.github/workflows/publish.yml`: typecheck, `bun run test:ci` (non-live), scriptc binaries for linux-x86_64 and darwin-arm64, then clobber the rolling `latest` GitHub Release. A red run is a finding to fix, not a reason to re-push past it.
 
@@ -61,6 +61,7 @@ src/plugins/tools.ts             read, grep, glob, ls, bash, write, edit
 src/plugins/skills.ts            --skills plugin (discover, catalog, skill tools)
 src/plugins/subs.ts              neo sub plugin (discover, list, sealed launch)
 src/plugins/subs-author.ts       neo sub create / update / delete
+packages/readable-stream-tee/    ReadableStream.tee for the scriptc island (streamText tees)
 tests/                           Vitest, real CLI process, no mocks
 setup.sh                         curl | bash installer (rolling `latest` release)
 install/                         Vercel proxy at https://getneo.sh

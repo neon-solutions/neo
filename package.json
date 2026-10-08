@@ -40,6 +40,7 @@
     "@neon/config": "^1.2.0",
     "ai": "^7.0.79",
     "commander": "^14.0.3",
+    "neo-readable-stream-tee": "file:./packages/readable-stream-tee",
     "zod": "4.4.3"
   },
   "devDependencies": {
