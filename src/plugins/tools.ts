@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tool } from "ai";
 import { z } from "zod";
+import { runBash } from "../lib/bash";
 import { applyEdits } from "../lib/edit";
 import { NeoError } from "../lib/errors";
 import { clip, errorCode, resolveUnderRoot } from "../lib/paths";
@@ -182,12 +183,7 @@ export function createTools(cwd: string, options: CreateToolsOptions) {
         command: z.string().describe("Bash command"),
       }),
       execute: async ({ command }) => {
-        const result = runCommand({
-          command: "bash",
-          argv: ["-lc", command],
-          cwd,
-          timeoutMs: BASH_TIMEOUT_MS,
-        });
+        const result = await runBash(command, cwd, BASH_TIMEOUT_MS);
         const output = [result.stdout, result.stderr].filter((part) => part.length > 0);
         if (result.code !== 0) {
           output.push(`exit ${result.code}`);
