@@ -183,7 +183,7 @@ export function createTools(cwd: string, options: CreateToolsOptions) {
         command: z.string().describe("Bash command"),
       }),
       execute: async ({ command }) => {
-        const result = await runBash(command, cwd, BASH_TIMEOUT_MS);
+        const result = runBash(command, cwd, BASH_TIMEOUT_MS);
         const output = [result.stdout, result.stderr].filter((part) => part.length > 0);
         if (result.code !== 0) {
           output.push(`exit ${result.code}`);
